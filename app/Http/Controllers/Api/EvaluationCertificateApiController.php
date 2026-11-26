@@ -75,6 +75,58 @@ class EvaluationCertificateApiController extends Controller
         });
     }
 
+    public function updateEvaluation(Request $request, ModuleEvaluation $evaluation): JsonResponse
+    {
+        CurriculumApiController::authorizeCourseOperation($request->user(), $evaluation->course);
+
+        $validated = $request->validate([
+            'module_id' => ['required', 'integer', 'exists:course_modules,id'],
+            'title' => ['required', 'string', 'min:3', 'max:160'],
+            'instructions' => ['nullable', 'string', 'max:1500'],
+            'passing_score' => ['required', 'numeric', 'min:10', 'max:100'],
+            'max_attempts' => ['required', 'integer', 'min:1', 'max:20'],
+            'questions' => ['required', 'array', 'min:1'],
+            'questions.*.question_text' => ['required', 'string', 'min:4'],
+            'questions.*.question_type' => ['required', 'string', 'in:multiple_choice,true_false'],
+            'questions.*.options' => ['required', 'array', 'min:2'],
+            'questions.*.correct_option' => ['required', 'string', 'max:40'],
+            'questions.*.points' => ['required', 'numeric', 'min:1', 'max:100'],
+            'questions.*.explanation' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        return DB::transaction(function () use ($evaluation, $validated) {
+            $evaluation->update([
+                'module_id' => $validated['module_id'],
+                'title' => $validated['title'],
+                'instructions' => $validated['instructions'] ?? null,
+                'passing_score' => $validated['passing_score'],
+                'max_attempts' => $validated['max_attempts'],
+            ]);
+
+            $evaluation->questions()->delete();
+            foreach ($validated['questions'] as $idx => $qData) {
+                EvaluationQuestion::create([
+                    'evaluation_id' => $evaluation->id,
+                    'question_text' => $qData['question_text'],
+                    'question_type' => $qData['question_type'],
+                    'options' => $qData['options'],
+                    'correct_option' => $qData['correct_option'],
+                    'points' => $qData['points'],
+                    'explanation' => $qData['explanation'] ?? null,
+                    'position' => $idx + 1,
+                ]);
+            }
+
+            AuditLog::record('update', 'module_evaluations', "Evaluación actualizada #{$evaluation->id}: {$evaluation->title}");
+
+            return response()->json([
+                'ok' => true,
+                'evaluation' => $evaluation->load('questions'),
+                'message' => 'Evaluación y preguntas actualizadas correctamente.',
+            ]);
+        });
+    }
+
     public function destroyEvaluation(Request $request, ModuleEvaluation $evaluation): JsonResponse
     {
         CurriculumApiController::authorizeCourseOperation($request->user(), $evaluation->course);
@@ -294,7 +346,7 @@ class EvaluationCertificateApiController extends Controller
             if (!is_dir($dir)) {
                 mkdir($dir, 0755, true);
             }
-            $fname = 'cert_' . $course->id . '_' . $validated['user_id'] . '_' . time() . '.' . $ext;
+            $fname = 'cert_' . $course->id . '_' . $validated['user_id'] . '_' . time() . '_' . Str::lower(Str::random(4)) . '.' . $ext;
             $file->move($dir, $fname);
             if ($customFilePath && file_exists(public_path($customFilePath))) {
                 @unlink(public_path($customFilePath));
@@ -325,6 +377,162 @@ class EvaluationCertificateApiController extends Controller
             'ok' => true,
             'certificate' => $cert->load(['user:id,name,email,id_document', 'course:id,title,hours_duration', 'issuer:id,name']),
             'message' => '¡Certificado emitido y habilitado para descarga e impresión del participante!',
+        ]);
+    }
+
+    public function indexCertificates(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $search = trim((string) $request->input('search', ''));
+        $courseId = $request->input('course_id');
+        $status = trim((string) $request->input('status', ''));
+
+        $like = DB::getDriverName() === 'pgsql' ? 'ilike' : 'like';
+
+        $query = Certificate::with([
+            'user:id,name,email,id_document',
+            'course:id,title,slug,hours_duration,instructor_id',
+            'issuer:id,name',
+        ]);
+
+        if ($user->isInstructor() && !$user->isAdmin() && !$user->isDirector()) {
+            $query->whereHas('course', fn ($c) => $c->where('instructor_id', $user->id));
+        }
+
+        if ($courseId) {
+            $query->where('course_id', (int) $courseId);
+        }
+
+        if ($status !== '') {
+            $query->where('status', $status);
+        }
+
+        if ($search !== '') {
+            $query->where(function ($b) use ($search, $like) {
+                $b->where('verification_code', $like, "%{$search}%")
+                  ->orWhereHas('user', fn ($u) => $u->where('name', $like, "%{$search}%")->orWhere('id_document', $like, "%{$search}%"))
+                  ->orWhereHas('course', fn ($c) => $c->where('title', $like, "%{$search}%"));
+            });
+        }
+
+        $coursesQuery = Course::orderBy('title');
+        if ($user->isInstructor() && !$user->isAdmin() && !$user->isDirector()) {
+            $coursesQuery->where('instructor_id', $user->id);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'certificates' => $query->orderByDesc('id')->paginate(10)->withQueryString(),
+            'courses' => $coursesQuery->get(['id', 'title', 'hours_duration']),
+            'participants' => \App\Models\User::where('is_active', true)->orderBy('name')->get(['id', 'name', 'email', 'id_document', 'role']),
+            'settings' => Setting::pluck('setting_value', 'setting_key')->toArray(),
+        ]);
+    }
+
+    public function updateCertificate(Request $request, Certificate $certificate): JsonResponse
+    {
+        CurriculumApiController::authorizeCourseOperation($request->user(), $certificate->course);
+
+        $validated = $request->validate([
+            'course_id' => ['nullable', 'integer', 'exists:courses,id'],
+            'user_id' => ['nullable', 'integer', 'exists:users,id'],
+            'verification_code' => ['nullable', 'string', 'min:4', 'max:60'],
+            'final_grade' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'attendance_pct' => ['nullable', 'integer', 'min:0', 'max:100'],
+            'hours_completed' => ['nullable', 'integer', 'min:1', 'max:1000'],
+            'status' => ['nullable', 'string', 'in:valid,revoked'],
+            'issued_at' => ['nullable', 'date'],
+            'remove_file' => ['nullable', 'boolean'],
+            'printable_file' => ['nullable', 'file', 'max:10240', 'mimes:pdf,jpg,jpeg,png,webp'],
+        ]);
+
+        if (!empty($validated['verification_code'])) {
+            $cleanCode = strtoupper(trim($validated['verification_code']));
+            $exists = Certificate::whereRaw('UPPER(verification_code) = ?', [$cleanCode])
+                ->where('id', '!=', $certificate->id)
+                ->exists();
+            if ($exists) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'Ese código QR ya está asignado a otro certificado.',
+                ], 422);
+            }
+            $certificate->verification_code = $cleanCode;
+        }
+
+        if (!empty($validated['course_id'])) {
+            $certificate->course_id = (int) $validated['course_id'];
+        }
+        if (!empty($validated['user_id'])) {
+            $certificate->user_id = (int) $validated['user_id'];
+        }
+        if (array_key_exists('final_grade', $validated) && $validated['final_grade'] !== null) {
+            $certificate->final_grade = $validated['final_grade'];
+        }
+        if (array_key_exists('attendance_pct', $validated) && $validated['attendance_pct'] !== null) {
+            $certificate->attendance_pct = $validated['attendance_pct'];
+        }
+        if (array_key_exists('hours_completed', $validated) && $validated['hours_completed'] !== null) {
+            $certificate->hours_completed = $validated['hours_completed'];
+        }
+        if (!empty($validated['status'])) {
+            $certificate->status = $validated['status'];
+        }
+        if (!empty($validated['issued_at'])) {
+            $certificate->issued_at = $validated['issued_at'];
+        }
+
+        if ($request->boolean('remove_file')) {
+            if ($certificate->custom_file_path && file_exists(public_path($certificate->custom_file_path))) {
+                @unlink(public_path($certificate->custom_file_path));
+            }
+            $certificate->custom_file_path = null;
+        }
+
+        if ($request->hasFile('printable_file')) {
+            $file = $request->file('printable_file');
+            $ext = strtolower($file->getClientOriginalExtension() ?: 'pdf');
+            $dir = public_path('uploads/certificates');
+            if (!is_dir($dir)) {
+                mkdir($dir, 0755, true);
+            }
+            $oldPath = $certificate->custom_file_path;
+            $fname = 'cert_' . $certificate->course_id . '_' . $certificate->user_id . '_' . time() . '_' . Str::lower(Str::random(4)) . '.' . $ext;
+            $file->move($dir, $fname);
+            if ($oldPath && file_exists(public_path($oldPath))) {
+                @unlink(public_path($oldPath));
+            }
+            $certificate->custom_file_path = 'uploads/certificates/' . $fname;
+        }
+
+        $certificate->issued_by = $request->user()->id;
+        $certificate->save();
+
+        AuditLog::record('update', 'certificates', "Edición de certificado {$certificate->verification_code}");
+
+        return response()->json([
+            'ok' => true,
+            'certificate' => $certificate->load(['user:id,name,email,id_document', 'course:id,title,hours_duration', 'issuer:id,name']),
+            'message' => 'Certificado actualizado correctamente.',
+        ]);
+    }
+
+    public function destroyCertificate(Request $request, Certificate $certificate): JsonResponse
+    {
+        CurriculumApiController::authorizeCourseOperation($request->user(), $certificate->course);
+
+        if ($certificate->custom_file_path && file_exists(public_path($certificate->custom_file_path))) {
+            @unlink(public_path($certificate->custom_file_path));
+        }
+
+        $code = $certificate->verification_code;
+        $certificate->delete();
+
+        AuditLog::record('delete', 'certificates', "Eliminación de certificado {$code}");
+
+        return response()->json([
+            'ok' => true,
+            'message' => "Certificado {$code} eliminado correctamente.",
         ]);
     }
 
@@ -364,11 +572,14 @@ class EvaluationCertificateApiController extends Controller
             ], 404);
         }
 
+        $allSettings = Setting::pluck('setting_value', 'setting_key')->toArray();
+
         return response()->json([
             'ok' => true,
             'valid' => $cert->status === 'valid',
-            'institution' => Setting::getVal('institution_name', 'FEDER'),
-            'authority' => Setting::getVal('certificate_authority', 'Dirección Ejecutiva FEDER'),
+            'institution' => $allSettings['institution_name'] ?? 'FEDER',
+            'authority' => $allSettings['certificate_authority'] ?? 'Dirección Ejecutiva FEDER',
+            'settings' => $allSettings,
             'certificate' => [
                 'verification_code' => $cert->verification_code,
                 'status' => $cert->status,

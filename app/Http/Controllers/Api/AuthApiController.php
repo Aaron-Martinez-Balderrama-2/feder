@@ -90,11 +90,11 @@ class AuthApiController extends Controller
             'password' => ['required', 'string', 'min:8', 'confirmed'],
             'id_document' => ['required', 'string', 'min:4', 'max:100'],
             'phone' => ['required', 'string', 'min:6', 'max:100'],
-            'birth_date' => ['required', 'date', 'before_or_equal:' . now()->subYears(15)->format('Y-m-d')],
+            'birth_date' => ['required', 'date', 'before_or_equal:' . now()->subYears(18)->format('Y-m-d')],
             'city' => ['nullable', 'string', 'max:100'],
             'gender' => ['nullable', 'string', 'max:50'],
         ], [
-            'birth_date.before_or_equal' => 'Debes tener al menos 15 años cumplidos para registrarte en la plataforma.',
+            'birth_date.before_or_equal' => 'Debes ser mayor de edad (18 años cumplidos) para registrarte en la plataforma.',
         ]);
 
         $participantRole = Role::where('slug', 'participant')->first();
@@ -300,7 +300,7 @@ class AuthApiController extends Controller
     public function updatePreferences(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'preferred_theme' => ['required', 'string', 'in:ninos,jovenes,adultos'],
+            'preferred_theme' => ['required', 'string', 'in:ejecutivo,jovenes,adultos,lectura'],
             'preferred_color_mode' => ['required', 'string', 'in:auto,light,dark'],
             'font_scale' => ['required', 'numeric', 'min:0.85', 'max:1.35'],
             'high_contrast' => ['required', 'boolean'],

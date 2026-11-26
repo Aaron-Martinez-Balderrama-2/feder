@@ -246,9 +246,9 @@ class PaymentAnalyticsApiController extends Controller
             ->map->count();
 
         $ageRanges = [
-            '15-24 años (Jóvenes)' => 0,
-            '25-44 años (Adultos Jóvenes)' => 0,
-            '45+ años (Adultos / Senior)' => 0,
+            '18-29 años (Jóvenes Adultos)' => 0,
+            '30-49 años (Adultos)' => 0,
+            '50+ años (Adultos Mayores)' => 0,
             'Sin dato' => 0,
         ];
         foreach ($participants as $p) {
@@ -257,12 +257,12 @@ class PaymentAnalyticsApiController extends Controller
                 continue;
             }
             $age = $p->birth_date->age;
-            if ($age < 25) {
-                $ageRanges['15-24 años (Jóvenes)']++;
-            } elseif ($age < 45) {
-                $ageRanges['25-44 años (Adultos Jóvenes)']++;
+            if ($age < 30) {
+                $ageRanges['18-29 años (Jóvenes Adultos)']++;
+            } elseif ($age < 50) {
+                $ageRanges['30-49 años (Adultos)']++;
             } else {
-                $ageRanges['45+ años (Adultos / Senior)']++;
+                $ageRanges['50+ años (Adultos Mayores)']++;
             }
         }
 
@@ -348,18 +348,16 @@ class PaymentAnalyticsApiController extends Controller
             fwrite($out, "\xEF\xBB\xBF");
             fputcsv($out, [
                 'ID',
-                'Curso / Oferta',
-                'Categoría',
-                'Periodo',
+                'Curso',
+                'Área / Categoría',
                 'Modalidad',
-                'Matriculados',
+                'Inscritos',
                 'Cupo Máximo',
                 '% Ocupación',
                 'Asistencias Registradas',
                 '% Asistencia',
                 '% Avance Fases',
                 'Certificados Emitidos',
-                'Ingresos Cobrados (Bs.)',
                 'Tiempo Uso Aula (Min)',
             ], ';');
 
@@ -368,7 +366,6 @@ class PaymentAnalyticsApiController extends Controller
                     $r['id'],
                     $r['title'],
                     $r['category'],
-                    $r['period'],
                     $r['modality'],
                     $r['enrollments_count'],
                     $r['capacity'],
@@ -377,7 +374,6 @@ class PaymentAnalyticsApiController extends Controller
                     $r['attendance_rate_pct'] . '%',
                     $r['progress_pct'] . '%',
                     $r['certificates_count'],
-                    number_format((float) $r['revenue_bob'], 2, '.', ''),
                     $r['active_minutes'],
                 ], ';');
             }

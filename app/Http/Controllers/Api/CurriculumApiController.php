@@ -369,8 +369,8 @@ class CurriculumApiController extends Controller
             'outcome' => ['required', 'string', 'max:255'],
             'level' => ['required', 'string', 'in:inicial,intermedio,avanzado'],
             'capacity' => ['required', 'integer', 'min:1', 'max:1000'],
-            'price' => ['required', 'numeric', 'min:0', 'max:50000'],
-            'installments_allowed' => ['required', 'integer', 'min:1', 'max:12'],
+            'price' => ['nullable', 'numeric', 'min:0', 'max:50000'],
+            'installments_allowed' => ['nullable', 'integer', 'min:1', 'max:12'],
             'modality' => ['required', 'string', 'in:presencial,virtual,hibrida'],
             'classroom_location' => ['nullable', 'string', 'max:160'],
             'hours_duration' => ['required', 'integer', 'min:1', 'max:1000'],
@@ -409,8 +409,8 @@ class CurriculumApiController extends Controller
                 'outcome' => $validated['outcome'],
                 'level' => $validated['level'],
                 'capacity' => $validated['capacity'],
-                'price' => $validated['price'],
-                'installments_allowed' => $validated['installments_allowed'],
+                'price' => $validated['price'] ?? 0,
+                'installments_allowed' => $validated['installments_allowed'] ?? 1,
                 'modality' => $validated['modality'],
                 'classroom_location' => $validated['classroom_location'] ?? null,
                 'hours_duration' => $validated['hours_duration'],
@@ -424,8 +424,13 @@ class CurriculumApiController extends Controller
                 'status' => $validated['status'],
             ]);
 
-            // Fases iniciales: usa la lista enviada o por defecto las 4 fases oficiales del cliente (100% editables luego)
-            $phaseNames = !empty($validated['phases']) ? array_values(array_filter($validated['phases'])) : Course::DEFAULT_PHASES;
+            // Fases iniciales: usa la lista enviada o las fases base configuradas (100% editables)
+            $configuredPhasesRaw = \App\Models\Setting::getVal('default_phases_json', '');
+            $configuredPhases = json_decode((string) $configuredPhasesRaw, true);
+            $fallbackPhases = (is_array($configuredPhases) && count($configuredPhases) > 0)
+                ? array_values(array_filter($configuredPhases))
+                : Course::DEFAULT_PHASES;
+            $phaseNames = !empty($validated['phases']) ? array_values(array_filter($validated['phases'])) : $fallbackPhases;
             $prevId = null;
             $weight = count($phaseNames) > 0 ? (int) floor(100 / count($phaseNames)) : 25;
 
@@ -478,8 +483,8 @@ class CurriculumApiController extends Controller
             'outcome' => ['required', 'string', 'max:255'],
             'level' => ['required', 'string', 'in:inicial,intermedio,avanzado'],
             'capacity' => ['required', 'integer', 'min:1', 'max:1000'],
-            'price' => ['required', 'numeric', 'min:0', 'max:50000'],
-            'installments_allowed' => ['required', 'integer', 'min:1', 'max:12'],
+            'price' => ['nullable', 'numeric', 'min:0', 'max:50000'],
+            'installments_allowed' => ['nullable', 'integer', 'min:1', 'max:12'],
             'modality' => ['required', 'string', 'in:presencial,virtual,hibrida'],
             'classroom_location' => ['nullable', 'string', 'max:160'],
             'hours_duration' => ['required', 'integer', 'min:1', 'max:1000'],
@@ -511,8 +516,8 @@ class CurriculumApiController extends Controller
             'outcome' => $validated['outcome'],
             'level' => $validated['level'],
             'capacity' => $validated['capacity'],
-            'price' => $validated['price'],
-            'installments_allowed' => $validated['installments_allowed'],
+            'price' => $validated['price'] ?? 0,
+            'installments_allowed' => $validated['installments_allowed'] ?? 1,
             'modality' => $validated['modality'],
             'classroom_location' => $validated['classroom_location'] ?? null,
             'hours_duration' => $validated['hours_duration'],

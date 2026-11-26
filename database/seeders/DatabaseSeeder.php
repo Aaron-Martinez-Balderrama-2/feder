@@ -40,16 +40,23 @@ class DatabaseSeeder extends Seeder
         Course::where('title', $like, '%Test Ciclo%')->orWhere('title', $like, '%Capacidad Limitada ACID%')->delete();
         Category::where('name', $like, '%Test Ciclo%')->delete();
 
-        // 1. Ajustes institucionales dinámicos (100% editables desde panel)
+        // 1. Ajustes institucionales y plantilla de certificado dinámicos (100% editables desde panel)
         $settings = [
             'institution_name' => 'FEDER · Fundación de Educación y Desarrollo Empresarial',
-            'institution_tagline' => 'Formación práctica, accesible y estructurada para microempresarios',
+            'institution_tagline' => 'Formación gratuita, práctica y estructurada por fases para microempresarios',
             'office_address' => 'Av. Bush, Ciudad Universitaria UAGRM · Módulo 236, Santa Cruz de la Sierra, Bolivia',
             'office_phone' => '+591 70031990',
             'office_email' => 'contacto@feder.edu.bo',
             'office_hours' => 'Lunes a Viernes 08:30 - 18:30 · Sábados 09:00 - 13:00',
             'office_map_embed' => '-17.776111,-63.195000',
-            'certificate_authority' => 'Dirección Ejecutiva Académica FEDER',
+            'certificate_header_title' => 'CERTIFICACIÓN DE FORMACIÓN EMPRESARIAL',
+            'certificate_intro_text' => 'Otorga el presente certificado a:',
+            'certificate_body_text' => 'Por haber completado y aprobado satisfactoriamente las fases prácticas, actividades y evaluaciones del programa gratuito de formación empresarial:',
+            'certificate_authority' => 'Dra. Elena Rojas',
+            'certificate_authority_role' => 'Directora Ejecutiva · Fundación FEDER',
+            'certificate_secondary_authority' => 'Coordinación Académica FEDER',
+            'certificate_secondary_role' => 'Registro y Certificación Oficial',
+            'default_phases_json' => json_encode(Course::DEFAULT_PHASES, JSON_UNESCAPED_UNICODE),
         ];
         foreach ($settings as $k => $v) {
             Setting::setVal($k, $v);
@@ -112,12 +119,13 @@ class DatabaseSeeder extends Seeder
         $roles['admin']->permissions()->sync(array_values(array_map(fn ($m) => $m->id, $perms)));
 
         $roles['director']->permissions()->sync([
+            $perms['classroom.learn']->id,
             $perms['curriculum.manage']->id,
             $perms['social.manage']->id,
+            $perms['evaluations.manage']->id,
             $perms['certificates.manage']->id,
             $perms['metrics.view']->id,
             $perms['reports.export']->id,
-            $perms['payments.manage']->id,
             $perms['audit.view']->id,
             $perms['classroom.operate']->id,
         ]);
@@ -132,25 +140,23 @@ class DatabaseSeeder extends Seeder
 
         $roles['participant']->permissions()->sync([
             $perms['classroom.learn']->id,
-            $perms['payments.own']->id,
             $perms['social.own']->id,
             $perms['certificates.own']->id,
         ]);
 
-        // 4. Menú Dinámico Persistido en Base de Datos (INF513 Req 2)
+        // 4. Navegación lateral filtrada automáticamente por permisos del rol activo
+        MenuItem::query()->delete();
         $menus = [
-            ['label' => 'Inicio', 'route_path' => '/', 'icon' => 'home', 'permission_slug' => null, 'section' => 'main', 'sort_order' => 10],
-            ['label' => 'Cursos y Ofertas', 'route_path' => '/cursos', 'icon' => 'book', 'permission_slug' => null, 'section' => 'main', 'sort_order' => 20],
-            ['label' => 'Verificar QR', 'route_path' => '/verificar', 'icon' => 'shield', 'permission_slug' => null, 'section' => 'main', 'sort_order' => 30],
-            ['label' => 'Sede y Contacto', 'route_path' => '/sede', 'icon' => 'map-pin', 'permission_slug' => null, 'section' => 'main', 'sort_order' => 40],
-            ['label' => 'Mi Aula', 'route_path' => '/mi-aula', 'icon' => 'graduation', 'permission_slug' => 'classroom.learn', 'section' => 'workspace', 'sort_order' => 50],
-            ['label' => 'Mis Pagos', 'route_path' => '/pagos', 'icon' => 'credit-card', 'permission_slug' => 'payments.own', 'section' => 'workspace', 'sort_order' => 60],
-            ['label' => 'Mi Emprendimiento', 'route_path' => '/vinculacion', 'icon' => 'heart', 'permission_slug' => 'social.own', 'section' => 'workspace', 'sort_order' => 70],
-            ['label' => 'Gestión Académica', 'route_path' => '/gestion/cursos', 'icon' => 'briefcase', 'permission_slug' => 'classroom.operate', 'section' => 'management', 'sort_order' => 80],
-            ['label' => 'Impacto y Reportes', 'route_path' => '/gestion/reportes', 'icon' => 'chart', 'permission_slug' => 'metrics.view', 'section' => 'management', 'sort_order' => 90],
-            ['label' => 'Vinculación Social', 'route_path' => '/gestion/social', 'icon' => 'users', 'permission_slug' => 'social.manage', 'section' => 'management', 'sort_order' => 100],
-            ['label' => 'Usuarios', 'route_path' => '/gestion/usuarios', 'icon' => 'user-check', 'permission_slug' => 'users.manage', 'section' => 'management', 'sort_order' => 110],
-            ['label' => 'Seguridad y Menús', 'route_path' => '/gestion/seguridad', 'icon' => 'lock', 'permission_slug' => 'rbac.manage', 'section' => 'management', 'sort_order' => 120],
+            ['label' => 'Mi Panel', 'route_path' => '/mi-aula', 'icon' => 'dashboard', 'permission_slug' => 'classroom.learn', 'section' => 'workspace', 'sort_order' => 10],
+            ['label' => 'Catálogo de Cursos', 'route_path' => '/cursos', 'icon' => 'book', 'permission_slug' => 'classroom.learn', 'section' => 'workspace', 'sort_order' => 20],
+            ['label' => 'Mi Emprendimiento', 'route_path' => '/vinculacion', 'icon' => 'briefcase', 'permission_slug' => 'social.own', 'section' => 'workspace', 'sort_order' => 30],
+            ['label' => 'Sede Institucional', 'route_path' => '/sede', 'icon' => 'map-pin', 'permission_slug' => 'classroom.learn', 'section' => 'workspace', 'sort_order' => 40],
+            ['label' => 'Cursos y Fases', 'route_path' => '/gestion/cursos', 'icon' => 'layers', 'permission_slug' => 'classroom.operate', 'section' => 'management', 'sort_order' => 50],
+            ['label' => 'Certificados QR', 'route_path' => '/gestion/certificados', 'icon' => 'award', 'permission_slug' => 'certificates.manage', 'section' => 'management', 'sort_order' => 60],
+            ['label' => 'Vinculación Social', 'route_path' => '/gestion/social', 'icon' => 'handshake', 'permission_slug' => 'social.manage', 'section' => 'management', 'sort_order' => 70],
+            ['label' => 'Reportes e Impacto', 'route_path' => '/gestion/reportes', 'icon' => 'chart', 'permission_slug' => 'metrics.view', 'section' => 'management', 'sort_order' => 80],
+            ['label' => 'Usuarios y Roles', 'route_path' => '/gestion/usuarios', 'icon' => 'users', 'permission_slug' => 'users.manage', 'section' => 'management', 'sort_order' => 90],
+            ['label' => 'Seguridad y Ajustes', 'route_path' => '/gestion/seguridad', 'icon' => 'shield', 'permission_slug' => 'rbac.manage', 'section' => 'management', 'sort_order' => 100],
         ];
 
         foreach ($menus as $m) {
@@ -328,10 +334,10 @@ class DatabaseSeeder extends Seeder
 
         $categoriesData = [
             ['name' => 'Gestión de Microempresas', 'slug' => 'gestion-microempresas', 'icon' => 'briefcase', 'description' => 'Bases prácticas para ordenar y hacer crecer tu negocio.'],
-            ['name' => 'Finanzas Corporativas', 'slug' => 'finanzas-corporativas', 'icon' => 'coin', 'description' => 'Control de caja, costos reales, precios y ahorro empresarial.'],
-            ['name' => 'Marketing Digital', 'slug' => 'marketing-digital', 'icon' => 'target', 'description' => 'Ventas prácticas por redes sociales, WhatsApp Business y atención al cliente.'],
+            ['name' => 'Finanzas Empresariales', 'slug' => 'finanzas-corporativas', 'icon' => 'coin', 'description' => 'Control de caja, costos reales, precios y ahorro empresarial.'],
+            ['name' => 'Marketing Digital', 'slug' => 'marketing-digital', 'icon' => 'target', 'description' => 'Ventas prácticas por redes sociales, catálogo digital y atención al cliente.'],
             ['name' => 'Formalización y Legal', 'slug' => 'liderazgo-y-rrhh', 'icon' => 'shield', 'description' => 'NIT, licencias, contratos simples y protección legal del negocio.'],
-            ['name' => 'Innovación y Datos', 'slug' => 'ciencia-de-datos', 'icon' => 'brain', 'description' => 'Herramientas digitales sencillas para controlar inventario y ventas.'],
+            ['name' => 'Herramientas Digitales', 'slug' => 'ciencia-de-datos', 'icon' => 'brain', 'description' => 'Herramientas digitales sencillas para controlar inventario y ventas.'],
         ];
 
         $categories = [];
@@ -339,19 +345,19 @@ class DatabaseSeeder extends Seeder
             $categories[$c['slug']] = Category::updateOrCreate(['slug' => $c['slug']], array_merge($c, ['is_active' => true]));
         }
 
-        // 8. Ofertas de Cursos con las 4 Fases Estándar Editables del Cliente
+        // 8. Ofertas Gratuitas de Cursos con las 4 Fases Estándar Editables de la Fundación
         $coursesSeed = [
             [
                 'slug' => 'escuela-inicial-para-microempresarios',
                 'category_slug' => 'gestion-microempresas',
                 'title' => 'Escuela Inicial para Microempresarios',
                 'hook' => 'Ordena tus cuentas, atrae más clientes y formaliza tu negocio paso a paso sin complicaciones.',
-                'description' => 'Programa práctico diseñado especialmente para dueños de negocios, talleres, comercios y emprendimientos familiares que buscan resultados claros.',
+                'description' => 'Programa gratuito práctico diseñado especialmente para dueños de negocios, talleres, comercios y emprendimientos familiares que buscan resultados claros.',
                 'outcome' => 'Tener tu plan de negocio, control de ganancias, catálogo digital y requisitos legales al día.',
                 'level' => 'inicial',
                 'capacity' => 35,
-                'price' => 240.00,
-                'installments_allowed' => 3,
+                'price' => 0.00,
+                'installments_allowed' => 1,
                 'modality' => 'hibrida',
                 'classroom_location' => 'Aula Planta Baja · Sede FEDER Módulo 236',
                 'hours_duration' => 60,
@@ -367,12 +373,12 @@ class DatabaseSeeder extends Seeder
                 'category_slug' => 'finanzas-corporativas',
                 'title' => 'Finanzas Prácticas para tu Negocio',
                 'hook' => 'Separa el dinero de tu casa del dinero de tu negocio y calcula tu ganancia real cada semana.',
-                'description' => 'Aprende con ejemplos cotidianos cómo fijar precios sin perder dinero, controlar deudas y prepararte para acceder a créditos productivos.',
-                'outcome' => 'Dominar tu cuaderno digital de flujo de caja, costos unitarios y punto de equilibrio.',
+                'description' => 'Aprende con ejemplos cotidianos cómo fijar precios sin perder dinero, controlar deudas y ordenar la caja de tu emprendimiento.',
+                'outcome' => 'Dominar tu registro de flujo de caja, costos unitarios y punto de equilibrio.',
                 'level' => 'inicial',
                 'capacity' => 30,
-                'price' => 300.00,
-                'installments_allowed' => 3,
+                'price' => 0.00,
+                'installments_allowed' => 1,
                 'modality' => 'presencial',
                 'classroom_location' => 'Sala Taller 2 · Sede FEDER',
                 'hours_duration' => 48,
@@ -386,16 +392,16 @@ class DatabaseSeeder extends Seeder
             [
                 'slug' => 'estrategias-de-ventas-digitales',
                 'category_slug' => 'marketing-digital',
-                'title' => 'Ventas por WhatsApp y Redes Sociales',
-                'hook' => 'Aprende a tomar buenas fotos con tu celular, publicar ofertas claras y cerrar pedidos rápido.',
-                'description' => 'Curso aplicado de principio a fin para vender más usando herramientas gratuitas desde el teléfono móvil, ideal para emprendedores con poco tiempo.',
-                'outcome' => 'Configurar tu catálogo en WhatsApp Business y lanzar tu primera campaña local efectiva.',
+                'title' => 'Marketing Digital y Ventas en Redes Sociales',
+                'hook' => 'Aprende a fotografiar tus productos, publicar ofertas claras y atender pedidos con rapidez.',
+                'description' => 'Curso gratuito aplicado de principio a fin para promocionar tu negocio usando herramientas digitales sencillas desde tu teléfono móvil.',
+                'outcome' => 'Tener tu catálogo digital listo y lanzar tu primera campaña comercial local.',
                 'level' => 'intermedio',
                 'capacity' => 30,
-                'price' => 360.00,
-                'installments_allowed' => 2,
+                'price' => 0.00,
+                'installments_allowed' => 1,
                 'modality' => 'virtual',
-                'classroom_location' => 'Aula Virtual FEDER (Zoom / Meet)',
+                'classroom_location' => 'Aula Virtual FEDER',
                 'hours_duration' => 50,
                 'requires_fair_participation' => true,
                 'cover_image' => 'assets/img/demo/course3.png',
@@ -414,7 +420,7 @@ class DatabaseSeeder extends Seeder
             $cs['instructor_id'] = $instructor->id;
             $cs['period_id'] = $period->id;
             $cs['meet_url'] = 'https://meet.google.com/ueb-egjg-mvw';
-            $cs['whatsapp_url'] = 'https://chat.whatsapp.com/CVDu2PQ2Sc73vzCXGAKzKe';
+            $cs['whatsapp_url'] = null;
 
             $course = Course::updateOrCreate(['slug' => $cs['slug']], $cs);
             $createdCourses[$cs['slug']] = $course;
@@ -521,8 +527,8 @@ class DatabaseSeeder extends Seeder
         if ($advCourse && isset($createdCourses['escuela-inicial-para-microempresarios'])) {
             $advCourse->update([
                 'period_id' => $period->id,
-                'price' => 420.00,
-                'installments_allowed' => 3,
+                'price' => 0.00,
+                'installments_allowed' => 1,
                 'cover_image' => 'assets/img/demo/course2.png',
                 'color' => '#F7780F',
             ]);
@@ -535,7 +541,7 @@ class DatabaseSeeder extends Seeder
             ]);
         }
 
-        // 9. Matrículas, Pagos Reales, Foro, Evaluación, Feria, Tiempo de Uso y Certificado QR (Datos reales para reportes!)
+        // 9. Matrículas Gratuitas, Foro, Evaluación, Feria, Tiempo de Uso y Certificado QR (Datos reales en BD)
         $mainCourse = $createdCourses['escuela-inicial-para-microempresarios'];
         $secondCourse = $createdCourses['finanzas-para-no-financieros'];
 
@@ -554,68 +560,8 @@ class DatabaseSeeder extends Seeder
             ['status' => 'active', 'enrolled_at' => now()->subDays(4)]
         );
 
-        // Métodos de Pago y Transacciones Reales (activa el Trigger PostgreSQL trg_sync_payment_plan_totals)
-        $pm1 = PaymentMethod::firstOrCreate(
-            ['user_id' => $participant1->id, 'masked_reference' => 'QR-SIMPLE-75011223'],
-            [
-                'method_type' => 'qr_banca',
-                'provider_name' => 'Banco Unión · QR Simple',
-                'holder_name' => $participant1->name,
-                'is_default' => true,
-            ]
-        );
-
-        $plan1 = PaymentPlan::firstOrCreate(
-            ['user_id' => $participant1->id, 'course_id' => $mainCourse->id],
-            [
-                'enrollment_id' => $enr1->id,
-                'plan_type' => 'unico',
-                'total_amount' => 240.00,
-                'installments_total' => 1,
-                'status' => 'pendiente',
-            ]
-        );
-
-        PaymentTransaction::firstOrCreate(
-            ['reference_code' => 'FED-REC-2026-0001'],
-            [
-                'payment_plan_id' => $plan1->id,
-                'user_id' => $participant1->id,
-                'payment_method_id' => $pm1->id,
-                'installment_number' => 1,
-                'amount' => 240.00,
-                'currency' => 'BOB',
-                'payment_status' => 'completado',
-                'paid_at' => now()->subDays(10),
-                'notes' => 'Pago completo de matrícula vía QR Simple.',
-            ]
-        );
-
-        $plan2 = PaymentPlan::firstOrCreate(
-            ['user_id' => $participant2->id, 'course_id' => $mainCourse->id],
-            [
-                'enrollment_id' => $enr2->id,
-                'plan_type' => 'cuotas',
-                'total_amount' => 240.00,
-                'installments_total' => 3,
-                'status' => 'pendiente',
-                'next_due_date' => now()->addDays(15)->format('Y-m-d'),
-            ]
-        );
-
-        PaymentTransaction::firstOrCreate(
-            ['reference_code' => 'FED-REC-2026-0002'],
-            [
-                'payment_plan_id' => $plan2->id,
-                'user_id' => $participant2->id,
-                'installment_number' => 1,
-                'amount' => 80.00,
-                'currency' => 'BOB',
-                'payment_status' => 'completado',
-                'paid_at' => now()->subDays(8),
-                'notes' => 'Pago de Cuota 1 de 3.',
-            ]
-        );
+        PaymentTransaction::query()->delete();
+        PaymentPlan::query()->delete();
 
         // Asistencia real registrada
         $firstClass = $mainCourse->classes()->first();
@@ -696,14 +642,25 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
-        // Sesiones reales de tiempo de uso en plataforma (activa Trigger PostgreSQL trg_sync_user_active_seconds)
-        UsageSession::updateOrCreate(
-            ['user_id' => $participant1->id, 'course_id' => $mainCourse->id, 'session_date' => now()->format('Y-m-d')],
-            ['seconds_spent' => 5400, 'pings_count' => 90, 'last_path' => '/mi-aula', 'last_ping_at' => now()]
-        );
-        UsageSession::updateOrCreate(
-            ['user_id' => $participant2->id, 'course_id' => $mainCourse->id, 'session_date' => now()->format('Y-m-d')],
-            ['seconds_spent' => 3300, 'pings_count' => 55, 'last_path' => '/mi-aula', 'last_ping_at' => now()]
-        );
+        // Sesiones reales de tiempo de uso en plataforma (activa Trigger trg_sync_user_active_seconds)
+        UsageSession::query()->delete();
+        UsageSession::create([
+            'user_id' => $participant1->id,
+            'course_id' => $mainCourse->id,
+            'session_date' => now()->format('Y-m-d'),
+            'seconds_spent' => 5400,
+            'pings_count' => 90,
+            'last_path' => '/mi-aula',
+            'last_ping_at' => now(),
+        ]);
+        UsageSession::create([
+            'user_id' => $participant2->id,
+            'course_id' => $mainCourse->id,
+            'session_date' => now()->format('Y-m-d'),
+            'seconds_spent' => 3300,
+            'pings_count' => 55,
+            'last_path' => '/mi-aula',
+            'last_ping_at' => now(),
+        ]);
     }
 }

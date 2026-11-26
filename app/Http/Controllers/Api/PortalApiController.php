@@ -34,24 +34,25 @@ class PortalApiController extends Controller
         $user = $request->user();
         $permissions = $user ? $user->permissionSlugs() : [];
 
-        // Menú dinámico renderizado desde PostgreSQL según permisos del rol activo (INF513 Req 2)
-        $allMenus = MenuItem::where('is_active', true)
-            ->orderBy('sort_order')
-            ->orderBy('id')
-            ->get();
+        // Menú dinámico por permisos RBAC solo para usuarios autenticados
+        $menus = collect();
+        if ($user) {
+            $allMenus = MenuItem::where('is_active', true)
+                ->whereNotIn('route_path', ['/', '/pagos'])
+                ->orderBy('sort_order')
+                ->orderBy('id')
+                ->get();
 
-        $menus = $allMenus->filter(function (MenuItem $item) use ($user, $permissions) {
-            if (empty($item->permission_slug)) {
-                return true;
-            }
-            if (!$user) {
-                return false;
-            }
-            if ($user->isAdmin()) {
-                return true;
-            }
-            return in_array($item->permission_slug, $permissions, true);
-        })->values();
+            $menus = $allMenus->filter(function (MenuItem $item) use ($user, $permissions) {
+                if ($user->isAdmin()) {
+                    return true;
+                }
+                if (empty($item->permission_slug)) {
+                    return true;
+                }
+                return in_array($item->permission_slug, $permissions, true);
+            })->values();
+        }
 
         $settingsMap = Setting::pluck('setting_value', 'setting_key')->toArray();
 
@@ -166,7 +167,7 @@ class PortalApiController extends Controller
         }
 
         $session = UsageSession::where('user_id', $user->id)
-            ->where('session_date', $today)
+            ->whereDate('session_date', $today)
             ->where(function ($q) use ($courseId) {
                 if ($courseId === null) {
                     $q->whereNull('course_id');
@@ -238,6 +239,10 @@ class PortalApiController extends Controller
     public static function serializeUser($user, ?array $permissions = null): array
     {
         $perms = $permissions ?? $user->permissionSlugs();
+        $theme = $user->preferred_theme ?: 'adultos';
+        if ($theme === 'ninos') {
+            $theme = 'adultos';
+        }
         return [
             'id' => $user->id,
             'name' => $user->name,
@@ -254,7 +259,7 @@ class PortalApiController extends Controller
             'initials' => $user->initials,
             'is_active' => (bool) $user->is_active,
             'total_active_seconds' => (int) ($user->total_active_seconds ?? 0),
-            'preferred_theme' => $user->preferred_theme ?: 'adultos',
+            'preferred_theme' => $theme,
             'preferred_color_mode' => $user->preferred_color_mode ?: 'auto',
             'font_scale' => (float) ($user->font_scale ?: 1.0),
             'high_contrast' => (bool) $user->high_contrast,

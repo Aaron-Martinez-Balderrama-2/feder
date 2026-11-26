@@ -11,20 +11,41 @@ use Tests\TestCase;
 class BlackBoxEndToEndTest extends TestCase
 {
     /**
-     * Caja Negra 1: CU1 Autenticación API, 4 Roles, Menú Dinámico BD, RBAC 403, Bitácora, Preferencias y Recuperación.
+     * Caja Negra 1: Puerta obligatoria de Login, Restricción +18 años, Rechazo de modo niño,
+     * 4 Roles, RBAC 403, Bitácora, Preferencias Adultos y Recuperación de Contraseña.
      */
-    public function test_blackbox_auth_rbac_dynamic_menus_preferences_and_audit_trail(): void
+    public function test_blackbox_auth_rbac_adult_only_preferences_and_audit_trail(): void
     {
         DB::beginTransaction();
         try {
-            // 1. Intento fallido -> validación en Español y registro en bitácora
+            // 1. Bloqueo 401 sin login al consultar catálogo interno o buscador interno
+            $this->getJson('/api/courses')->assertStatus(401);
+            $this->getJson('/api/search?q=Finanzas')->assertStatus(401);
+
+            // Bootstrap sin sesión NO debe exponer menús internos
+            $guestBoot = $this->postJson('/api/bootstrap', ['path' => '/ingresar', 'title' => 'Ingresar']);
+            $guestBoot->assertStatus(200)->assertJsonCount(0, 'menus');
+
+            // 2. Rechazo de menores de 18 años en registro
+            $minorReg = $this->postJson('/api/auth/register', [
+                'name' => 'Menor Prueba',
+                'email' => 'menor_' . Str::lower(Str::random(4)) . '@test.bo',
+                'password' => 'password123',
+                'password_confirmation' => 'password123',
+                'id_document' => '11223344',
+                'phone' => '70011223',
+                'birth_date' => now()->subYears(16)->format('Y-m-d'),
+            ]);
+            $minorReg->assertStatus(422);
+
+            // 3. Intento fallido de login -> validación en Español y bitácora
             $badLogin = $this->postJson('/api/auth/login', [
                 'email' => 'a3ronmartinez@gmail.com',
                 'password' => 'clave_incorrecta_xyz',
             ]);
             $badLogin->assertStatus(422);
 
-            // 2. Login exitoso como Admin
+            // 4. Login exitoso como Admin
             $adminLogin = $this->postJson('/api/auth/login', [
                 'email' => 'a3ronmartinez@gmail.com',
                 'password' => 'password',
@@ -33,16 +54,16 @@ class BlackBoxEndToEndTest extends TestCase
             $adminToken = $adminLogin->json('token');
             $this->assertNotEmpty($adminToken);
 
-            // 3. Bootstrap devuelve menú dinámico completo y contador de visitas del Footer
+            // 5. Bootstrap autenticado devuelve menú por permisos y contador de visitas
             $bootAdmin = $this->withHeader('X-Auth-Token', $adminToken)
-                ->postJson('/api/bootstrap', ['path' => '/cursos', 'title' => 'Catálogo']);
+                ->postJson('/api/bootstrap', ['path' => '/mi-aula', 'title' => 'Mi Panel']);
             $bootAdmin->assertStatus(200)
                 ->assertJsonPath('ok', true)
                 ->assertJsonPath('user.role', 'admin');
             $this->assertGreaterThanOrEqual(8, count($bootAdmin->json('menus')));
             $this->assertGreaterThanOrEqual(1, $bootAdmin->json('visits.page_hits'));
 
-            // 4. Login como Participante -> menú restringido y bloqueo 403 en ruta administrativa
+            // 6. Login como Participante -> bloqueo 403 en ruta administrativa
             $partLogin = $this->postJson('/api/auth/login', [
                 'email' => 'estudiante@feder.edu.bo',
                 'password' => 'password',
@@ -54,17 +75,26 @@ class BlackBoxEndToEndTest extends TestCase
                 ->getJson('/api/manage/users');
             $denied->assertStatus(403)->assertJsonPath('ok', false);
 
-            // 5. Preferencias de 3 Temas + Día/Noche + Accesibilidad WCAG
+            // 7. Preferencias de estilo: 'ninos' es rechazado (422) y estilos adultos funcionan (200)
+            $this->withHeader('X-Auth-Token', $partToken)
+                ->postJson('/api/auth/preferences', [
+                    'preferred_theme' => 'ninos',
+                    'preferred_color_mode' => 'dark',
+                    'font_scale' => 1.0,
+                    'high_contrast' => false,
+                ])
+                ->assertStatus(422);
+
             $prefRes = $this->withHeader('X-Auth-Token', $partToken)
                 ->postJson('/api/auth/preferences', [
-                    'preferred_theme' => 'jovenes',
+                    'preferred_theme' => 'lectura',
                     'preferred_color_mode' => 'dark',
                     'font_scale' => 1.15,
                     'high_contrast' => true,
                 ]);
-            $prefRes->assertStatus(200)->assertJsonPath('preferences.preferred_theme', 'jovenes');
+            $prefRes->assertStatus(200)->assertJsonPath('preferences.preferred_theme', 'lectura');
 
-            // 6. Recuperación de contraseña completa
+            // 8. Recuperación de contraseña completa
             $forgot = $this->postJson('/api/auth/forgot-password', ['email' => 'emprendedor@feder.edu.bo']);
             $forgot->assertStatus(200);
             $code = $forgot->json('recovery_code_preview');
@@ -78,7 +108,7 @@ class BlackBoxEndToEndTest extends TestCase
             ]);
             $reset->assertStatus(200)->assertJsonPath('ok', true);
 
-            // 7. Verificar que la bitácora registró login_failed y access_denied
+            // 9. Verificar que la bitácora registró login_failed y access_denied
             $auditRes = $this->withHeader('X-Auth-Token', $adminToken)->getJson('/api/manage/audit-logs');
             $auditRes->assertStatus(200);
             $this->assertGreaterThanOrEqual(1, $auditRes->json('summary.logins_failed'));
@@ -89,9 +119,10 @@ class BlackBoxEndToEndTest extends TestCase
     }
 
     /**
-     * Caja Negra 2: Flujo integral CU2, CU3, CU4, CU5, CU6, CU7, CU8, Pagos, Foro, Materiales, QR y Reporte CSV.
+     * Caja Negra 2: Ciclo completo CU2 a CU8 para Fundación Gratuita:
+     * Cursos gratuitos por fases editables, edición de evaluaciones, edición/reemplazo de certificados y plantilla, foro, materiales y reportes reales.
      */
-    public function test_blackbox_full_business_lifecycle_cu2_to_cu8_and_payments(): void
+    public function test_blackbox_full_free_foundation_lifecycle_editable_evaluations_and_certificates(): void
     {
         $uploadedPathsToClean = [];
         DB::beginTransaction();
@@ -102,7 +133,7 @@ class BlackBoxEndToEndTest extends TestCase
             $instLogin = $this->postJson('/api/auth/login', ['email' => 'docente@feder.edu.bo', 'password' => 'password']);
             $instHeaders = ['X-Auth-Token' => $instLogin->json('token')];
 
-            // Registrar nuevo participante emprendedor (CU1)
+            // Registrar nuevo participante mayor de 18 años (CU1)
             $regRes = $this->postJson('/api/auth/register', [
                 'name' => 'Lucía Quispe Condori',
                 'email' => 'lucia_' . Str::lower(Str::random(5)) . '@feder.bo',
@@ -118,7 +149,7 @@ class BlackBoxEndToEndTest extends TestCase
             $stuId = $regRes->json('user.id');
             $stuHeaders = ['X-Auth-Token' => $regRes->json('token')];
 
-            // CU2: Guardar ficha de emprendimiento y verificarla
+            // CU2: Guardar ficha de emprendimiento y validarla
             $socSave = $this->withHeaders($stuHeaders)->postJson('/api/social/my-profile', [
                 'business_name' => 'Confecciones Lucía',
                 'sector' => 'Textil y Confección',
@@ -133,21 +164,19 @@ class BlackBoxEndToEndTest extends TestCase
                 ->postJson("/api/manage/social/profiles/{$profId}/verify", ['social_impact_notes' => 'Verificado'])
                 ->assertStatus(200);
 
-            // CU3: Crear curso verificando las 4 fases por defecto y su edición + subfases
+            // CU3: Crear curso 100% gratuito sin periodo/semestre ni cuotas, con 4 fases base editables
             $catId = DB::table('categories')->value('id');
             $instructorId = User::where('email', 'docente@feder.edu.bo')->value('id');
 
             $courseRes = $this->withHeaders($adminHeaders)->postJson('/api/manage/courses', [
-                'title' => ' Gestión Integral Textil E2E ',
+                'title' => 'Gestión Integral Textil E2E',
                 'category_id' => $catId,
                 'instructor_id' => $instructorId,
                 'hook' => 'Mejora tu taller de confección.',
-                'description' => 'Curso completo de producción y ventas.',
+                'description' => 'Curso gratuito completo de producción y ventas.',
                 'outcome' => 'Duplicar productividad.',
                 'level' => 'inicial',
                 'capacity' => 20,
-                'price' => 200,
-                'installments_allowed' => 2,
                 'modality' => 'hibrida',
                 'hours_duration' => 45,
                 'start_date' => now()->format('Y-m-d'),
@@ -156,6 +185,7 @@ class BlackBoxEndToEndTest extends TestCase
             ]);
             $courseRes->assertStatus(201);
             $courseId = $courseRes->json('course.id');
+            $this->assertEquals(0, (float) $courseRes->json('course.price'));
             $modules = $courseRes->json('course.modules');
             $this->assertCount(4, $modules);
             $this->assertEquals('Modelo de negocio', $modules[0]['title']);
@@ -174,23 +204,13 @@ class BlackBoxEndToEndTest extends TestCase
             $subRes->assertStatus(201);
             $classId = $subRes->json('class.id');
 
-            // Req 10: Inscripción de Lucía en Plan de 2 Cuotas y pago de la 2da cuota
-            $checkout = $this->withHeaders($stuHeaders)->postJson("/api/courses/{$courseId}/checkout", [
-                'plan_type' => 'cuotas',
-                'installments_total' => 2,
-                'pay_first_now' => true,
-                'new_method' => [
-                    'method_type' => 'qr_banca',
-                    'provider_name' => 'Banco Unión QR',
-                    'masked_reference' => 'QR-9988',
-                    'holder_name' => 'Lucía Quispe',
-                ],
+            // Inscripción 100% Gratuita de un clic
+            $enroll = $this->withHeaders($stuHeaders)->postJson("/api/courses/{$courseId}/checkout", [
+                'plan_type' => 'unico',
+                'installments_total' => 1,
+                'pay_first_now' => false,
             ]);
-            $checkout->assertStatus(200)->assertJsonPath('payment_plan.status', 'parcial');
-            $planId = $checkout->json('payment_plan.id');
-
-            $pay2 = $this->withHeaders($stuHeaders)->postJson("/api/payments/plans/{$planId}/pay", []);
-            $pay2->assertStatus(200)->assertJsonPath('plan.status', 'pagado');
+            $enroll->assertStatus(200)->assertJsonPath('ok', true);
 
             // CU4: Subir material por fase y subfase, foro de preguntas, asistencia y pulso de tiempo
             $fakePdf = UploadedFile::fake()->create('guia_costeo.pdf', 120, 'application/pdf');
@@ -232,17 +252,17 @@ class BlackBoxEndToEndTest extends TestCase
                 ->postJson('/api/usage/heartbeat', ['seconds' => 60, 'course_id' => $courseId, 'path' => "/aula/{$courseId}"])
                 ->assertStatus(200);
 
-            // CU5: Evaluación con calificación automática y Feria
+            // CU5: Crear evaluación, EDITAR evaluación y preguntas, rendirla y evaluar Feria
             $evalRes = $this->withHeaders($instHeaders)->postJson("/api/manage/courses/{$courseId}/evaluations", [
                 'module_id' => $firstModId,
-                'title' => 'Examen Fase 1',
+                'title' => 'Autoevaluación Inicial',
                 'passing_score' => 60,
-                'max_attempts' => 2,
+                'max_attempts' => 3,
                 'questions' => [
                     [
-                        'question_text' => '¿Cuánto margen mínimo se sugiere cubrir?',
+                        'question_text' => 'Pregunta inicial',
                         'question_type' => 'multiple_choice',
-                        'options' => [['key' => 'A', 'text' => 'Todos los costos más utilidad'], ['key' => 'B', 'text' => 'Solo tela']],
+                        'options' => [['key' => 'A', 'text' => 'Correcta'], ['key' => 'B', 'text' => 'Incorrecta']],
                         'correct_option' => 'A',
                         'points' => 100,
                     ],
@@ -250,10 +270,29 @@ class BlackBoxEndToEndTest extends TestCase
             ]);
             $evalRes->assertStatus(201);
             $evalId = $evalRes->json('evaluation.id');
-            $qId = $evalRes->json('evaluation.questions.0.id');
+
+            // Editar la evaluación y reemplazar sus preguntas (100% editable)
+            $editEvalRes = $this->withHeaders($instHeaders)->putJson("/api/manage/evaluations/{$evalId}", [
+                'module_id' => $firstModId,
+                'title' => 'Autoevaluación Fase 1 Editada',
+                'passing_score' => 70,
+                'max_attempts' => 4,
+                'questions' => [
+                    [
+                        'question_text' => '¿Cuánto margen mínimo se sugiere cubrir?',
+                        'question_type' => 'multiple_choice',
+                        'options' => [['key' => 'A', 'text' => 'Solo tela'], ['key' => 'B', 'text' => 'Todos los costos más utilidad']],
+                        'correct_option' => 'B',
+                        'points' => 100,
+                        'explanation' => 'Debes cubrir costos fijos, variables y ganancia.',
+                    ],
+                ],
+            ]);
+            $editEvalRes->assertStatus(200)->assertJsonPath('evaluation.title', 'Autoevaluación Fase 1 Editada');
+            $qId = $editEvalRes->json('evaluation.questions.0.id');
 
             $attemptRes = $this->withHeaders($stuHeaders)->postJson("/api/evaluations/{$evalId}/attempt", [
-                'answers' => [$qId => 'A'],
+                'answers' => [$qId => 'B'],
             ]);
             $attemptRes->assertStatus(200)
                 ->assertJsonPath('attempt.percentage', 100)
@@ -263,45 +302,63 @@ class BlackBoxEndToEndTest extends TestCase
                 ->postJson("/api/classroom/{$courseId}/fair-register", ['project_title' => 'Uniformes Escolares Lucía'])
                 ->assertStatus(200);
 
-            $this->withHeaders($instHeaders)
-                ->postJson("/api/manage/courses/{$courseId}/fair-evaluate", [
-                    'user_id' => $stuId,
-                    'project_title' => 'Uniformes Escolares Lucía',
-                    'stand_code' => 'B-12',
-                    'rubric_score' => 95,
-                    'participation_status' => 'destacado',
-                ])
-                ->assertStatus(200);
-
-            // CU6: Emitir certificado imprimible y verificar públicamente su código QR sin sesión
-            $certPdf = UploadedFile::fake()->create('certificado_firmado.pdf', 80, 'application/pdf');
+            // CU6: Emitir certificado, EDITARLO / REEMPLAZAR su archivo y personalizar plantilla institucional
+            $certPdf1 = UploadedFile::fake()->create('certificado_v1.pdf', 80, 'application/pdf');
             $certRes = $this->withHeaders($instHeaders)->post("/api/manage/courses/{$courseId}/certificates", [
                 'user_id' => $stuId,
-                'final_grade' => 97,
-                'attendance_pct' => 100,
+                'final_grade' => 92,
+                'attendance_pct' => 95,
                 'hours_completed' => 45,
-                'printable_file' => $certPdf,
+                'printable_file' => $certPdf1,
             ], ['Accept' => 'application/json']);
             $certRes->assertStatus(200);
-            $qrCode = $certRes->json('certificate.verification_code');
+            $certId = $certRes->json('certificate.id');
             if ($certRes->json('certificate.custom_file_path')) {
                 $uploadedPathsToClean[] = public_path($certRes->json('certificate.custom_file_path'));
             }
 
-            // Inspección pública sin token
-            $this->getJson("/api/certificates/verify/{$qrCode}")
+            // Editar certificado y reemplazar PDF como Administrador
+            $certPdf2 = UploadedFile::fake()->create('certificado_reemplazado_v2.pdf', 90, 'application/pdf');
+            $customQr = 'FEDER-EDIT-' . Str::upper(Str::random(5));
+            $updCertRes = $this->withHeaders($adminHeaders)->post("/api/manage/certificates/{$certId}/update", [
+                'verification_code' => $customQr,
+                'final_grade' => 99,
+                'hours_completed' => 60,
+                'status' => 'valid',
+                'printable_file' => $certPdf2,
+            ], ['Accept' => 'application/json']);
+            $updCertRes->assertStatus(200)
+                ->assertJsonPath('certificate.verification_code', $customQr)
+                ->assertJsonPath('certificate.hours_completed', 60);
+            if ($updCertRes->json('certificate.custom_file_path')) {
+                $uploadedPathsToClean[] = public_path($updCertRes->json('certificate.custom_file_path'));
+            }
+
+            // Personalizar plantilla institucional de certificados
+            $this->withHeaders($adminHeaders)->postJson('/api/manage/settings', [
+                'institution_name' => 'Fundación FEDER Bolivia',
+                'office_address' => 'Av. Bush UAGRM',
+                'office_map_embed' => '-17.776111,-63.195000',
+                'certificate_header_title' => 'CERTIFICADO OFICIAL PERSONALIZADO',
+                'certificate_authority' => 'Ing. Aaron Martinez',
+                'certificate_authority_role' => 'Dirección General FEDER',
+            ])->assertStatus(200);
+
+            // Inspección pública mediante Código QR sin login refleja los cambios de plantilla y edición
+            $this->getJson("/api/certificates/verify/{$customQr}")
                 ->assertStatus(200)
                 ->assertJsonPath('valid', true)
-                ->assertJsonPath('certificate.participant_name', 'Lucía Quispe Condori');
+                ->assertJsonPath('certificate.participant_name', 'Lucía Quispe Condori')
+                ->assertJsonPath('settings.certificate_header_title', 'CERTIFICADO OFICIAL PERSONALIZADO');
 
-            // Req 9 + CU7 + CU8: Búsqueda global predictiva y Reportes reales + CSV
-            $this->getJson('/api/search?q=Textil')
+            // Búsqueda global autenticada y Reportes reales + CSV sin columnas de cobros
+            $this->withHeaders($adminHeaders)->getJson('/api/search?q=Textil')
                 ->assertStatus(200)
                 ->assertJsonPath('ok', true);
 
             $metricsRes = $this->withHeaders($adminHeaders)->getJson('/api/analytics/dashboard');
             $metricsRes->assertStatus(200)->assertJsonPath('ok', true);
-            $this->assertGreaterThan(0, $metricsRes->json('kpis.total_revenue_bob'));
+            $this->assertGreaterThanOrEqual(1, $metricsRes->json('kpis.total_enrollments'));
 
             $csvRes = $this->withHeaders($adminHeaders)->get('/api/analytics/export-csv');
             $csvRes->assertStatus(200);

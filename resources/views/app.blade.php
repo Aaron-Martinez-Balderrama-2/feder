@@ -10,7 +10,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>{{ config('app.name', 'FEDER') }} · Plataforma de Formación Empresarial</title>
+    <title>{{ config('app.name', 'FEDER') }} · Fundación de Educación y Desarrollo Empresarial</title>
 
     <link rel="icon" href="{{ $basePath }}/favicon.png" type="image/png">
     <link rel="shortcut icon" href="{{ $basePath }}/favicon.png" type="image/png">
@@ -18,7 +18,7 @@
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Fraunces:opsz,wght@9..144,600;9..144,800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
 
     <script>
         window.__APP_BASE__ = @json($basePath);
@@ -27,6 +27,7 @@
             try {
                 var prefs = JSON.parse(localStorage.getItem('feder_prefs') || '{}');
                 var seg = prefs.preferred_theme || 'adultos';
+                if (seg === 'ninos') seg = 'adultos';
                 var mode = prefs.preferred_color_mode || 'auto';
                 var scale = parseFloat(prefs.font_scale || '1');
                 var contrast = !!prefs.high_contrast;

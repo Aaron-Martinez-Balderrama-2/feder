@@ -10,9 +10,14 @@ const DEFAULT_PREFS = {
   high_contrast: false,
 };
 
+function normalizeTheme(val) {
+  if (!val || val === 'ninos') return 'adultos';
+  return val;
+}
+
 function applyVisualPrefs(prefs) {
   const root = document.documentElement;
-  const seg = prefs.preferred_theme || 'adultos';
+  const seg = normalizeTheme(prefs.preferred_theme);
   const mode = prefs.preferred_color_mode || 'auto';
   const scale = Math.min(1.35, Math.max(0.85, Number(prefs.font_scale || 1.0)));
   const high = Boolean(prefs.high_contrast);
@@ -39,7 +44,6 @@ export function PortalProvider({ children }) {
   const [menus, setMenus] = useState([]);
   const [settings, setSettings] = useState({});
   const [categories, setCategories] = useState([]);
-  const [periods, setPeriods] = useState([]);
   const [visits, setVisits] = useState({ page_path: '/', page_hits: 1, total_hits: 1 });
   const [toast, setToast] = useState(null);
   const [activeCourseId, setActiveCourseId] = useState(null);
@@ -47,7 +51,11 @@ export function PortalProvider({ children }) {
   const [prefs, setPrefs] = useState(() => {
     try {
       const saved = JSON.parse(localStorage.getItem('feder_prefs') || '{}');
-      return { ...DEFAULT_PREFS, ...saved };
+      return {
+        ...DEFAULT_PREFS,
+        ...saved,
+        preferred_theme: normalizeTheme(saved.preferred_theme),
+      };
     } catch {
       return DEFAULT_PREFS;
     }
@@ -58,7 +66,7 @@ export function PortalProvider({ children }) {
   const notify = useCallback((message, type = 'success') => {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast({ message, type });
-    toastTimerRef.current = setTimeout(() => setToast(null), 4500);
+    toastTimerRef.current = setTimeout(() => setToast(null), 4200);
   }, []);
 
   const refreshBootstrap = useCallback(async (currentPath = '/', pageTitle = 'FEDER') => {
@@ -69,12 +77,11 @@ export function PortalProvider({ children }) {
         setMenus(data.menus || []);
         setSettings(data.settings || {});
         setCategories(data.categories || []);
-        setPeriods(data.periods || []);
         if (data.visits) setVisits(data.visits);
 
         if (data.user) {
           const serverPrefs = {
-            preferred_theme: data.user.preferred_theme || 'adultos',
+            preferred_theme: normalizeTheme(data.user.preferred_theme),
             preferred_color_mode: data.user.preferred_color_mode || 'auto',
             font_scale: Number(data.user.font_scale || 1.0),
             high_contrast: Boolean(data.user.high_contrast),
@@ -85,7 +92,7 @@ export function PortalProvider({ children }) {
         }
       }
     } catch {
-      // Mantiene estado local si la red está intermitente
+      // Mantiene estado local ante microcorte de red
     } finally {
       setBooting(false);
     }
@@ -96,17 +103,21 @@ export function PortalProvider({ children }) {
   }, [prefs]);
 
   useEffect(() => {
-    const initialPath = window.location.hash ? (window.location.hash.replace(/^#/, '') || '/') : (window.location.pathname || '/');
+    const initialPath = window.location.hash
+      ? window.location.hash.replace(/^#/, '') || '/'
+      : window.location.pathname || '/';
     refreshBootstrap(initialPath, document.title);
   }, [refreshBootstrap]);
 
-  // Pulso automático de control de tiempo real de uso en plataforma y curso (cada 30s activo)
+  // Control real de tiempo activo en plataforma y aula (cada 30s)
   useEffect(() => {
     if (!user) return undefined;
     const interval = setInterval(async () => {
       if (document.visibilityState !== 'visible') return;
       try {
-        const activePath = window.location.hash ? (window.location.hash.replace(/^#/, '') || '/') : (window.location.pathname || '/');
+        const activePath = window.location.hash
+          ? window.location.hash.replace(/^#/, '') || '/'
+          : window.location.pathname || '/';
         const { data } = await api.post('/usage/heartbeat', {
           seconds: 30,
           course_id: activeCourseId || null,
@@ -116,7 +127,7 @@ export function PortalProvider({ children }) {
           setUser((prev) => (prev ? { ...prev, total_active_seconds: data.total_active_seconds } : prev));
         }
       } catch {
-        // Silencioso en caso de microcorte de red
+        // Silencioso
       }
     }, 30000);
 
@@ -130,51 +141,65 @@ export function PortalProvider({ children }) {
         setVisits(data.visits);
       }
     } catch {
-      // No interrumpe navegación del cliente
+      // No interrumpe navegación
     }
   }, []);
 
-  const updateVisualPreferences = useCallback(async (partial) => {
-    const next = { ...prefs, ...partial };
-    setPrefs(next);
-    localStorage.setItem('feder_prefs', JSON.stringify(next));
-    applyVisualPrefs(next);
+  const updateVisualPreferences = useCallback(
+    async (partial) => {
+      const next = {
+        ...prefs,
+        ...partial,
+        preferred_theme: normalizeTheme(partial.preferred_theme ?? prefs.preferred_theme),
+      };
+      setPrefs(next);
+      localStorage.setItem('feder_prefs', JSON.stringify(next));
+      applyVisualPrefs(next);
 
-    if (user) {
-      try {
-        await api.post('/auth/preferences', next);
-      } catch {
-        // Guardado local ya aplicado
+      if (user) {
+        try {
+          await api.post('/auth/preferences', next);
+        } catch {
+          // Preferencia local ya aplicada
+        }
       }
-    }
-  }, [prefs, user]);
+    },
+    [prefs, user]
+  );
 
-  const handleAuthSuccess = useCallback(async (token, loggedUser, msg) => {
-    if (token) {
-      localStorage.setItem('feder_token', token);
-    }
-    setUser(loggedUser);
-    await refreshBootstrap('/', 'Inicio · FEDER');
-    if (msg) notify(msg, 'success');
-  }, [refreshBootstrap, notify]);
+  const handleAuthSuccess = useCallback(
+    async (token, loggedUser, msg) => {
+      if (token) {
+        localStorage.setItem('feder_token', token);
+      }
+      setUser(loggedUser);
+      await refreshBootstrap('/mi-aula', 'Mi Panel · FEDER');
+      if (msg) notify(msg, 'success');
+    },
+    [refreshBootstrap, notify]
+  );
 
   const logout = useCallback(async () => {
     try {
       await api.post('/auth/logout');
     } catch {
-      // Limpiar credenciales locales de igual manera
+      // Limpieza local garantizada
     }
     localStorage.removeItem('feder_token');
     setUser(null);
-    await refreshBootstrap('/', 'Inicio · FEDER');
+    setMenus([]);
+    await refreshBootstrap('/ingresar', 'Iniciar Sesión · FEDER');
     notify('Has cerrado tu sesión correctamente.', 'success');
   }, [refreshBootstrap, notify]);
 
-  const hasPermission = useCallback((slug) => {
-    if (!user) return false;
-    if (user.role === 'admin') return true;
-    return Array.isArray(user.permissions) && user.permissions.includes(slug);
-  }, [user]);
+  const hasPermission = useCallback(
+    (slug) => {
+      if (!user) return false;
+      if (user.role === 'admin') return true;
+      return Array.isArray(user.permissions) && user.permissions.includes(slug);
+    },
+    [user]
+  );
 
   return (
     <PortalContext.Provider
@@ -186,7 +211,6 @@ export function PortalProvider({ children }) {
         settings,
         setSettings,
         categories,
-        periods,
         visits,
         prefs,
         toast,

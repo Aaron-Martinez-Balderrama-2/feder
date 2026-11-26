@@ -4,7 +4,6 @@ import { BrowserRouter, HashRouter, Routes, Route, Navigate } from 'react-router
 import { PortalProvider, usePortal } from './context/PortalContext';
 import { APP_BASE, USE_QUERY_API } from './lib/api';
 import {
-  HomePage,
   CatalogPage,
   CourseDetailPage,
   VerifyCertificatePage,
@@ -15,29 +14,44 @@ import {
   RegisterPage,
   ForgotResetPasswordPage,
   WorkspacePage,
-  PaymentsPage,
   SocialProfilePage,
   ProfileEditPage,
 } from './pages/AuthAndWorkspacePages';
 import { VirtualClassroomPage } from './pages/VirtualClassroomPage';
 import {
   ManageCoursesPage,
+  ManageCertificatesPage,
   AnalyticsReportsPage,
   ManageSocialPage,
   ManageUsersPage,
   ManageSecurityPage,
 } from './pages/ManagementPages';
 
+function BootLoader() {
+  return (
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', fontWeight: 600 }}>
+      Cargando plataforma FEDER...
+    </div>
+  );
+}
+
+function RootRedirect() {
+  const { booting, user } = usePortal();
+  if (booting) return <BootLoader />;
+  return <Navigate to={user ? '/mi-aula' : '/ingresar'} replace />;
+}
+
+function GuestOnlyRoute({ children }) {
+  const { booting, user } = usePortal();
+  if (booting) return <BootLoader />;
+  if (user) return <Navigate to="/mi-aula" replace />;
+  return children;
+}
+
 function ProtectedRoute({ children, requiredPermissions = [] }) {
   const { booting, user, hasPermission } = usePortal();
 
-  if (booting) {
-    return (
-      <div style={{ padding: '3rem', textAlign: 'center', fontWeight: 700 }}>
-        Cargando plataforma FEDER...
-      </div>
-    );
-  }
+  if (booting) return <BootLoader />;
 
   if (!user) {
     return <Navigate to="/ingresar" replace />;
@@ -56,23 +70,42 @@ function ProtectedRoute({ children, requiredPermissions = [] }) {
 function AppRoutes() {
   return (
     <Routes>
-      {/* Vistas Públicas */}
-      <Route path="/" element={<HomePage />} />
-      <Route path="/cursos" element={<CatalogPage />} />
-      <Route path="/cursos/:slug" element={<CourseDetailPage />} />
+      {/* Puerta Principal: Exige inicio de sesión antes de entrar a la plataforma */}
+      <Route path="/" element={<RootRedirect />} />
+
+      {/* Autenticación y Recuperación (Solo invitados) */}
+      <Route
+        path="/ingresar"
+        element={
+          <GuestOnlyRoute>
+            <LoginPage />
+          </GuestOnlyRoute>
+        }
+      />
+      <Route path="/login" element={<Navigate to="/ingresar" replace />} />
+      <Route
+        path="/registro"
+        element={
+          <GuestOnlyRoute>
+            <RegisterPage />
+          </GuestOnlyRoute>
+        }
+      />
+      <Route path="/register" element={<Navigate to="/registro" replace />} />
+      <Route
+        path="/recuperar-clave"
+        element={
+          <GuestOnlyRoute>
+            <ForgotResetPasswordPage />
+          </GuestOnlyRoute>
+        }
+      />
+
+      {/* Inspección Pública Oficial de Certificados mediante Código QR (CU6) */}
       <Route path="/verificar" element={<VerifyCertificatePage />} />
       <Route path="/verificar/:code" element={<VerifyCertificatePage />} />
-      <Route path="/sede" element={<CampusPage />} />
-      <Route path="/mapa-del-sitio" element={<Navigate to="/sede" replace />} />
 
-      {/* Autenticación y Recuperación */}
-      <Route path="/ingresar" element={<LoginPage />} />
-      <Route path="/login" element={<Navigate to="/ingresar" replace />} />
-      <Route path="/registro" element={<RegisterPage />} />
-      <Route path="/register" element={<Navigate to="/registro" replace />} />
-      <Route path="/recuperar-clave" element={<ForgotResetPasswordPage />} />
-
-      {/* Espacio del Participante / Docente */}
+      {/* Espacio Protegido de Aprendizaje y Participación */}
       <Route
         path="/mi-aula"
         element={
@@ -82,18 +115,26 @@ function AppRoutes() {
         }
       />
       <Route
-        path="/aula/:courseId"
+        path="/cursos"
         element={
           <ProtectedRoute>
-            <VirtualClassroomPage />
+            <CatalogPage />
           </ProtectedRoute>
         }
       />
       <Route
-        path="/pagos"
+        path="/cursos/:slug"
         element={
           <ProtectedRoute>
-            <PaymentsPage />
+            <CourseDetailPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/aula/:courseId"
+        element={
+          <ProtectedRoute>
+            <VirtualClassroomPage />
           </ProtectedRoute>
         }
       />
@@ -113,13 +154,29 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/sede"
+        element={
+          <ProtectedRoute>
+            <CampusPage />
+          </ProtectedRoute>
+        }
+      />
 
-      {/* Módulos de Gestión (Protegidos por Matriz RBAC) */}
+      {/* Módulos de Gestión Institucional Protegidos por RBAC */}
       <Route
         path="/gestion/cursos"
         element={
           <ProtectedRoute requiredPermissions={['classroom.operate', 'curriculum.manage']}>
             <ManageCoursesPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/gestion/certificados"
+        element={
+          <ProtectedRoute requiredPermissions={['certificates.manage', 'classroom.operate']}>
+            <ManageCertificatesPage />
           </ProtectedRoute>
         }
       />

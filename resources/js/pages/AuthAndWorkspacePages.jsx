@@ -1,8 +1,33 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { AppShell, CertificatePrintableCard } from '../components/AppShell';
+import {
+  LogIn,
+  UserPlus,
+  KeyRound,
+  Shield,
+  BarChart3,
+  BookOpen,
+  UserCheck,
+  Clock,
+  Award,
+  Eye,
+  Printer,
+  Download,
+  Save,
+  Camera,
+  Trash2,
+  ArrowRight,
+  Layers,
+} from 'lucide-react';
+import { AppShell, AuthShell, CertificatePrintableCard } from '../components/AppShell';
 import { usePortal } from '../context/PortalContext';
 import { api, assetUrl, extractError, fileToBase64, formatDuration } from '../lib/api';
+
+function maxAdultBirthDate() {
+  const d = new Date();
+  d.setFullYear(d.getFullYear() - 18);
+  return d.toISOString().slice(0, 10);
+}
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -34,18 +59,18 @@ export function LoginPage() {
   };
 
   return (
-    <AppShell pageTitle="Iniciar Sesión">
-      <div style={{ maxWidth: 480, margin: '0.5rem auto' }}>
+    <AuthShell pageTitle="Iniciar Sesión">
+      <div style={{ maxWidth: 440, margin: '0 auto' }}>
         <div className="fed-card fed-top-stripe-orange fed-card-pad">
-          <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
+          <div style={{ textAlign: 'center', marginBottom: '1.35rem' }}>
             <img
               src={assetUrl('favicon.png')}
               alt="Logo FEDER"
-              style={{ width: 58, height: 58, objectFit: 'contain', marginBottom: '0.5rem' }}
+              style={{ width: 52, height: 52, objectFit: 'contain', marginBottom: '0.5rem' }}
             />
-            <h1 style={{ margin: '0 0 0.25rem', fontSize: '1.55rem', fontWeight: 900 }}>Iniciar Sesión</h1>
-            <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.92rem' }}>
-              Ingresa tus datos para acceder a tus cursos, pagos y certificados.
+            <h1 style={{ margin: '0 0 0.25rem', fontSize: '1.4rem', fontWeight: 800 }}>Acceso a Plataforma FEDER</h1>
+            <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.88rem' }}>
+              Ingresa tus credenciales para acceder a tus cursos gratuitos, fases y certificados.
             </p>
           </div>
 
@@ -55,7 +80,7 @@ export function LoginPage() {
               <input
                 type="email"
                 className="fed-input"
-                placeholder="ejemplo@correo.com"
+                placeholder="nombre@correo.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -65,7 +90,7 @@ export function LoginPage() {
             <div className="fed-field">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <label className="fed-label">Contraseña</label>
-                <Link to="/recuperar-clave" style={{ fontSize: '0.82rem', color: 'var(--fed-orange)', fontWeight: 700 }}>
+                <Link to="/recuperar-clave" style={{ fontSize: '0.8rem', color: 'var(--fed-orange)', fontWeight: 600 }}>
                   ¿Olvidaste tu contraseña?
                 </Link>
               </div>
@@ -80,46 +105,52 @@ export function LoginPage() {
             </div>
 
             <button type="submit" className="btn btn-primary btn-lg btn-block" disabled={loading}>
-              {loading ? 'Ingresando...' : 'Entrar a la Plataforma'}
+              <LogIn size={17} />
+              <span>{loading ? 'Ingresando...' : 'Iniciar Sesión'}</span>
             </button>
           </form>
 
-          {/* Accesos rápidos de prueba para los 4 roles aprobados en CU1 */}
-          <div style={{ marginTop: '1.25rem', padding: '0.85rem', borderRadius: 10, background: 'var(--bg-subtle)', border: '1px solid var(--border-line)' }}>
-            <div style={{ fontSize: '0.78rem', fontWeight: 800, color: 'var(--text-muted)', marginBottom: '0.5rem', textAlign: 'center' }}>
-              Cuentas rápidas por Rol (CU1):
+          {/* Selección rápida de roles para evaluación */}
+          <div style={{ marginTop: '1.25rem', padding: '0.85rem', borderRadius: 9, background: 'var(--bg-subtle)', border: '1px solid var(--border-line)' }}>
+            <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '0.5rem', textAlign: 'center' }}>
+              Acceso directo de demostración por rol:
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.4rem' }}>
               <button type="button" className="btn btn-sm btn-secondary" onClick={() => quickFill('a3ronmartinez@gmail.com')}>
-                🔑 Admin (Aaron)
+                <Shield size={14} />
+                <span>Administrador</span>
               </button>
               <button type="button" className="btn btn-sm btn-secondary" onClick={() => quickFill('director@feder.edu.bo')}>
-                📊 Director Ejecutivo
+                <BarChart3 size={14} />
+                <span>Dirección</span>
               </button>
               <button type="button" className="btn btn-sm btn-secondary" onClick={() => quickFill('docente@feder.edu.bo')}>
-                👨‍🏫 Instructor
+                <BookOpen size={14} />
+                <span>Instructor</span>
               </button>
               <button type="button" className="btn btn-sm btn-secondary" onClick={() => quickFill('estudiante@feder.edu.bo')}>
-                👩‍💼 Participante
+                <UserCheck size={14} />
+                <span>Participante</span>
               </button>
             </div>
           </div>
 
-          <div style={{ textAlign: 'center', marginTop: '1rem', fontSize: '0.9rem' }}>
-            ¿Aún no tienes cuenta?{' '}
-            <Link to="/registro" style={{ color: 'var(--fed-orange)', fontWeight: 800 }}>
-              Regístrate aquí
+          <div style={{ textAlign: 'center', marginTop: '1rem', fontSize: '0.88rem', color: 'var(--text-secondary)' }}>
+            ¿Eres nuevo participante?{' '}
+            <Link to="/registro" style={{ color: 'var(--fed-orange)', fontWeight: 700 }}>
+              Crear cuenta gratuita
             </Link>
           </div>
         </div>
       </div>
-    </AppShell>
+    </AuthShell>
   );
 }
 
 export function RegisterPage() {
   const navigate = useNavigate();
   const { handleAuthSuccess, notify } = usePortal();
+  const maxDate = maxAdultBirthDate();
 
   const [form, setForm] = useState({
     name: '',
@@ -151,19 +182,19 @@ export function RegisterPage() {
   };
 
   return (
-    <AppShell pageTitle="Registro de Participante">
-      <div style={{ maxWidth: 640, margin: '0.5rem auto' }}>
+    <AuthShell pageTitle="Registro de Participante">
+      <div style={{ maxWidth: 620, margin: '0 auto' }}>
         <div className="fed-card fed-top-stripe-green fed-card-pad">
           <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
-            <img src={assetUrl('favicon.png')} alt="FEDER" style={{ width: 52, height: 52, objectFit: 'contain' }} />
-            <h1 style={{ margin: '0.35rem 0', fontSize: '1.5rem', fontWeight: 900 }}>Crear Cuenta de Participante</h1>
-            <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-              Completa tus datos básicos para inscribirte a nuestros cursos y emitir tus certificados.
+            <img src={assetUrl('favicon.png')} alt="FEDER" style={{ width: 46, height: 46, objectFit: 'contain' }} />
+            <h1 style={{ margin: '0.35rem 0 0.2rem', fontSize: '1.35rem', fontWeight: 800 }}>Registro de Participante (Mayor de 18 años)</h1>
+            <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.88rem' }}>
+              Inscripción gratuita para microempresarios y emprendedores adultos.
             </p>
           </div>
 
           <form onSubmit={onSubmit}>
-            <div className="fed-form-grid">
+            <div className="fed-form-grid-2">
               <div className="fed-field">
                 <label className="fed-label">Nombre Completo *</label>
                 <input
@@ -195,7 +226,7 @@ export function RegisterPage() {
                 />
               </div>
               <div className="fed-field">
-                <label className="fed-label">Celular / WhatsApp *</label>
+                <label className="fed-label">Teléfono / Celular *</label>
                 <input
                   type="text"
                   className="fed-input"
@@ -205,9 +236,10 @@ export function RegisterPage() {
                 />
               </div>
               <div className="fed-field">
-                <label className="fed-label">Fecha de Nacimiento *</label>
+                <label className="fed-label">Fecha de Nacimiento (+18 años) *</label>
                 <input
                   type="date"
+                  max={maxDate}
                   className="fed-input"
                   value={form.birth_date}
                   onChange={(e) => setForm({ ...form, birth_date: e.target.value })}
@@ -249,12 +281,20 @@ export function RegisterPage() {
             </div>
 
             <button type="submit" className="btn btn-green btn-lg btn-block" disabled={loading}>
-              {loading ? 'Registrando...' : 'Crear mi cuenta ahora'}
+              <UserPlus size={17} />
+              <span>{loading ? 'Registrando...' : 'Crear mi cuenta gratuita'}</span>
             </button>
+
+            <div style={{ textAlign: 'center', marginTop: '0.9rem', fontSize: '0.86rem' }}>
+              ¿Ya tienes cuenta?{' '}
+              <Link to="/ingresar" style={{ color: 'var(--fed-orange)', fontWeight: 700 }}>
+                Iniciar sesión
+              </Link>
+            </div>
           </form>
         </div>
       </div>
-    </AppShell>
+    </AuthShell>
   );
 }
 
@@ -312,14 +352,18 @@ export function ForgotResetPasswordPage() {
   };
 
   return (
-    <AppShell pageTitle="Recuperar Cuenta">
-      <div style={{ maxWidth: 480, margin: '0.5rem auto' }}>
+    <AuthShell pageTitle="Recuperar Contraseña">
+      <div style={{ maxWidth: 440, margin: '0 auto' }}>
         <div className="fed-card fed-top-stripe-orange fed-card-pad">
-          <h1 style={{ margin: '0 0 0.4rem', fontSize: '1.45rem', fontWeight: 900 }}>Recuperar mi Contraseña</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+            <KeyRound size={20} color="var(--fed-orange)" />
+            <h1 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 800 }}>Recuperar Contraseña</h1>
+          </div>
+
           {step === 1 ? (
             <form onSubmit={requestCode}>
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-                Escribe tu correo registrado y generaremos un código de recuperación para restablecer tu clave.
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', marginTop: 0 }}>
+                Ingresa tu correo registrado para generar un código temporal de restablecimiento.
               </p>
               <div className="fed-field">
                 <label className="fed-label">Correo Electrónico</label>
@@ -332,14 +376,14 @@ export function ForgotResetPasswordPage() {
                 />
               </div>
               <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
-                {loading ? 'Enviando...' : 'Solicitar Código de Recuperación'}
+                {loading ? 'Generando...' : 'Solicitar Código de Recuperación'}
               </button>
             </form>
           ) : (
             <form onSubmit={resetNow}>
               {generatedPreview && (
-                <div style={{ background: 'var(--fed-green-soft)', border: '1px solid var(--fed-green-border)', padding: '0.75rem', borderRadius: 8, marginBottom: '0.9rem', fontSize: '0.86rem' }}>
-                  📩 Código enviado / verificado para tu cuenta: <strong>{generatedPreview}</strong>
+                <div style={{ background: 'var(--fed-green-soft)', border: '1px solid var(--fed-green-border)', padding: '0.75rem', borderRadius: 8, marginBottom: '0.9rem', fontSize: '0.85rem' }}>
+                  Código verificado para tu cuenta: <strong>{generatedPreview}</strong>
                 </div>
               )}
               <div className="fed-field">
@@ -377,14 +421,20 @@ export function ForgotResetPasswordPage() {
               </button>
             </form>
           )}
+
+          <div style={{ textAlign: 'center', marginTop: '0.9rem', fontSize: '0.85rem' }}>
+            <Link to="/ingresar" style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>
+              Volver al inicio de sesión
+            </Link>
+          </div>
         </div>
       </div>
-    </AppShell>
+    </AuthShell>
   );
 }
 
 export function WorkspacePage() {
-  const { user, settings } = usePortal();
+  const { user, settings, hasPermission } = usePortal();
   const [data, setData] = useState({ enrollments: [], instructed_courses: [], certificates: [], total_active_seconds: 0 });
   const [selectedCert, setSelectedCert] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -398,43 +448,89 @@ export function WorkspacePage() {
       .finally(() => setLoading(false));
   }, []);
 
+  const canManageCerts = hasPermission('certificates.manage') || hasPermission('classroom.operate');
+
   return (
-    <AppShell pageTitle="Mi Aula y Certificados">
+    <AppShell pageTitle="Mi Panel">
       <div className="fed-section-head no-print">
-        <div className="fed-title-accent">
-          <div className="fed-accent-bar" />
-          <div>
-            <h1 className="fed-page-title">Hola, {user?.name}</h1>
-            <p className="fed-page-desc">
-              Aquí tienes acceso directo a tus cursos, materiales, foro de consultas y certificados imprimibles.
-            </p>
-          </div>
+        <div>
+          <h1 className="fed-page-title">Bienvenido, {user?.name}</h1>
+          <p className="fed-page-desc">
+            Accede a tus cursos por fases, materiales ligeros, foro de consultas y certificados digitales QR.
+          </p>
         </div>
-        <div className="fed-badge badge-green" style={{ padding: '0.5rem 0.9rem', fontSize: '0.86rem' }}>
-          ⏱️ Tiempo activo en plataforma: {formatDuration(data.total_active_seconds || user?.total_active_seconds)}
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <Link to="/cursos" className="btn btn-primary btn-sm">
+            <BookOpen size={15} />
+            <span>Explorar Cursos</span>
+          </Link>
+          {canManageCerts && (
+            <Link to="/gestion/certificados" className="btn btn-secondary btn-sm">
+              <Award size={15} />
+              <span>Administrar Certificados</span>
+            </Link>
+          )}
         </div>
       </div>
 
-      {/* Cursos que imparte (si es Instructor / Director / Admin) */}
+      {/* Resumen Limpio en Base de Datos */}
+      <div className="fed-kpi-grid no-print">
+        <div className="fed-card fed-card-pad">
+          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600 }}>Cursos Inscritos</div>
+          <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--text-main)', marginTop: '0.15rem' }}>
+            {data.enrollments?.length || 0}
+          </div>
+        </div>
+        {data.instructed_courses?.length > 0 && (
+          <div className="fed-card fed-card-pad">
+            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600 }}>Cursos bajo Gestión</div>
+            <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--fed-orange)', marginTop: '0.15rem' }}>
+              {data.instructed_courses.length}
+            </div>
+          </div>
+        )}
+        <div className="fed-card fed-card-pad">
+          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600 }}>Mis Certificados QR</div>
+          <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--fed-green)', marginTop: '0.15rem' }}>
+            {data.certificates?.length || 0}
+          </div>
+        </div>
+        <div className="fed-card fed-card-pad">
+          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600 }}>Tiempo Activo Registrado</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '1.25rem', fontWeight: 700, marginTop: '0.3rem' }}>
+            <Clock size={18} color="var(--fed-green)" />
+            <span>{formatDuration(data.total_active_seconds || user?.total_active_seconds)}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Cursos bajo Gestión Docente / Administrativa */}
       {data.instructed_courses?.length > 0 && (
         <section className="no-print" style={{ marginBottom: '2rem' }}>
-          <h2 style={{ fontSize: '1.25rem', fontWeight: 900, marginBottom: '0.85rem' }}>
-            👨‍🏫 Cursos a tu Cargo (Operación Docente)
-          </h2>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem' }}>
+            <h2 style={{ margin: 0, fontSize: '1.12rem', fontWeight: 700 }}>Cursos bajo tu Supervisión</h2>
+            <Link to="/gestion/cursos" className="btn btn-sm btn-secondary">
+              <Layers size={14} />
+              <span>Crear o Editar Cursos</span>
+            </Link>
+          </div>
           <div className="fed-grid-cards">
             {data.instructed_courses.map((c) => (
-              <div key={c.id} className="fed-card fed-top-stripe-orange fed-card-pad">
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
+              <div key={c.id} className="fed-card fed-card-pad" style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.4rem' }}>
                   <span className="fed-badge badge-orange">{c.category?.name || 'Curso'}</span>
-                  <span className="fed-badge badge-green">{c.enrollments_count || 0} participantes</span>
+                  <span className="fed-badge badge-green">{c.enrollments_count || 0} inscritos</span>
                 </div>
-                <h3 style={{ margin: '0.3rem 0 0.6rem', fontSize: '1.1rem', fontWeight: 900 }}>{c.title}</h3>
-                <div style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', marginBottom: '0.9rem' }}>
+                <h3 style={{ margin: '0.15rem 0', fontSize: '1.04rem', fontWeight: 700 }}>{c.title}</h3>
+                <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
                   Avance de fases: <strong>{c.progress_pct}%</strong>
                 </div>
-                <Link to={`/aula/${c.id}`} className="btn btn-primary btn-block">
-                  Operar Aula, Materiales, Asistencia y Certificados →
-                </Link>
+                <div style={{ marginTop: 'auto', paddingTop: '0.4rem' }}>
+                  <Link to={`/aula/${c.id}`} className="btn btn-primary btn-sm btn-block">
+                    <span>Operar Fases, Evaluaciones y Certificados</span>
+                    <ArrowRight size={15} />
+                  </Link>
+                </div>
               </div>
             ))}
           </div>
@@ -443,75 +539,84 @@ export function WorkspacePage() {
 
       {/* Mis Cursos Inscritos */}
       <section className="no-print" style={{ marginBottom: '2rem' }}>
-        <h2 style={{ fontSize: '1.25rem', fontWeight: 900, marginBottom: '0.85rem' }}>
-          📘 Mis Cursos Inscritos
-        </h2>
+        <h2 style={{ margin: '0 0 0.85rem', fontSize: '1.12rem', fontWeight: 700 }}>Mis Cursos Inscritos</h2>
         {loading ? (
           <div className="fed-card fed-card-pad">Cargando tus cursos...</div>
         ) : data.enrollments.length === 0 ? (
-          <div className="fed-card fed-card-pad">
-            <p style={{ margin: '0 0 0.85rem' }}>Todavía no te has inscrito en ningún curso activo.</p>
-            <Link to="/cursos" className="btn btn-primary">
-              Explorar Cursos Disponibles →
+          <div className="fed-card fed-card-pad" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+            <span style={{ color: 'var(--text-secondary)', fontSize: '0.92rem' }}>
+              Aún no te has inscrito en un curso activo. Todos nuestros cursos son gratuitos.
+            </span>
+            <Link to="/cursos" className="btn btn-primary btn-sm">
+              <span>Ver Catálogo de Cursos</span>
+              <ArrowRight size={15} />
             </Link>
           </div>
         ) : (
           <div className="fed-grid-cards">
             {data.enrollments.map((enr) => (
-              <div key={enr.id} className="fed-card fed-top-stripe-green fed-card-pad">
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+              <div key={enr.id} className="fed-card fed-card-pad" style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span className="fed-badge badge-green">
-                    {enr.status === 'completed' ? '✓ Curso Aprobado' : 'En Curso'}
+                    {enr.status === 'completed' ? 'Aprobado' : 'En Curso'}
                   </span>
-                  <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
                     Avance: {enr.course?.progress_pct || 0}%
                   </span>
                 </div>
-                <h3 style={{ margin: '0 0 0.5rem', fontSize: '1.12rem', fontWeight: 900 }}>
-                  {enr.course?.title}
-                </h3>
-                <div className="fed-progress-track" style={{ marginBottom: '0.9rem' }}>
+                <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700 }}>{enr.course?.title}</h3>
+                <div className="fed-progress-track">
                   <div className="fed-progress-fill" style={{ width: `${enr.course?.progress_pct || 0}%` }} />
                 </div>
-                <Link to={`/aula/${enr.course_id}`} className="btn btn-green btn-block">
-                  Entrar a Clases, Foro y Materiales →
-                </Link>
+                <div style={{ marginTop: 'auto', paddingTop: '0.4rem' }}>
+                  <Link to={`/aula/${enr.course_id}`} className="btn btn-green btn-sm btn-block">
+                    <span>Entrar al Aula Virtual</span>
+                    <ArrowRight size={15} />
+                  </Link>
+                </div>
               </div>
             ))}
           </div>
         )}
       </section>
 
-      {/* Autogestión e Impresión de Mis Certificados QR (CU6) */}
+      {/* Mis Certificados Oficiales Imprimibles (CU6) */}
       <section>
-        <h2 className="no-print" style={{ fontSize: '1.25rem', fontWeight: 900, marginBottom: '0.85rem' }}>
-          🏅 Mis Certificados Oficiales Imprimibles (Código QR)
+        <h2 className="no-print" style={{ margin: '0 0 0.85rem', fontSize: '1.12rem', fontWeight: 700 }}>
+          Mis Certificados Imprimibles con Código QR
         </h2>
         {data.certificates.length === 0 ? (
-          <div className="fed-card fed-card-pad no-print" style={{ color: 'var(--text-secondary)' }}>
-            Cuando completes un curso, tu certificado imprimible con código QR aparecerá automáticamente aquí.
+          <div className="fed-card fed-card-pad no-print" style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+            Cuando apruebes un curso, tu certificado verificable aparecerá aquí listo para descargar e imprimir.
           </div>
         ) : (
           <>
-            <div className="fed-grid-cards no-print" style={{ marginBottom: '1.5rem' }}>
+            <div className="fed-grid-cards no-print" style={{ marginBottom: '1.25rem' }}>
               {data.certificates.map((cert) => (
-                <div key={cert.id} className="fed-card fed-top-stripe-orange fed-card-pad">
-                  <span className="fed-badge badge-green" style={{ marginBottom: '0.45rem' }}>
-                    Código QR: {cert.verification_code}
+                <div key={cert.id} className="fed-card fed-card-pad">
+                  <span className="fed-badge badge-lead" style={{ marginBottom: '0.45rem', fontFamily: 'var(--font-mono)' }}>
+                    {cert.verification_code}
                   </span>
-                  <h3 style={{ margin: '0 0 0.4rem', fontSize: '1.08rem', fontWeight: 900 }}>
+                  <h3 style={{ margin: '0 0 0.35rem', fontSize: '1.02rem', fontWeight: 700 }}>
                     {cert.course?.title}
                   </h3>
-                  <div style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', marginBottom: '0.85rem' }}>
-                    Nota final: <strong>{cert.final_grade || 100}/100</strong> · Horas: <strong>{cert.hours_completed}h</strong>
+                  <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '0.85rem' }}>
+                    Calificación: <strong>{cert.final_grade || 100}/100</strong> · Horas: <strong>{cert.hours_completed}h</strong>
                   </div>
-                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', gap: '0.45rem', flexWrap: 'wrap' }}>
                     <button
                       type="button"
                       className="btn btn-sm btn-primary"
-                      onClick={() => setSelectedCert({ ...cert, participant_name: user?.name, participant_document: user?.id_document })}
+                      onClick={() =>
+                        setSelectedCert({
+                          ...cert,
+                          participant_name: user?.name,
+                          participant_document: user?.id_document,
+                        })
+                      }
                     >
-                      👁️ Ver e Imprimir
+                      <Eye size={14} />
+                      <span>Ver e Imprimir</span>
                     </button>
                     {cert.custom_file_path && (
                       <a
@@ -520,7 +625,8 @@ export function WorkspacePage() {
                         rel="noreferrer"
                         className="btn btn-sm btn-green"
                       >
-                        📥 Descargar Archivo
+                        <Download size={14} />
+                        <span>Descargar Archivo</span>
                       </a>
                     )}
                   </div>
@@ -531,10 +637,11 @@ export function WorkspacePage() {
             {selectedCert && (
               <div>
                 <div className="no-print" style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                  <button type="button" className="btn btn-green" onClick={() => window.print()}>
-                    🖨️ Imprimir Ahora
+                  <button type="button" className="btn btn-green btn-sm" onClick={() => window.print()}>
+                    <Printer size={15} />
+                    <span>Imprimir Certificado</span>
                   </button>
-                  <button type="button" className="btn btn-secondary" onClick={() => setSelectedCert(null)}>
+                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => setSelectedCert(null)}>
                     Cerrar Vista Previa
                   </button>
                 </div>
@@ -548,247 +655,6 @@ export function WorkspacePage() {
           </>
         )}
       </section>
-    </AppShell>
-  );
-}
-
-export function PaymentsPage() {
-  const { user, notify } = usePortal();
-  const [methods, setMethods] = useState([]);
-  const [plans, setPlans] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  const [newMethod, setNewMethod] = useState({
-    method_type: 'qr_banca',
-    provider_name: 'Banco Unión · QR Simple',
-    masked_reference: '',
-    holder_name: user?.name || '',
-    is_default: true,
-  });
-
-  const loadPayments = () => {
-    setLoading(true);
-    api
-      .get('/payments/my')
-      .then((res) => {
-        if (res.data.ok) {
-          setMethods(res.data.methods || []);
-          setPlans(res.data.plans || []);
-        }
-      })
-      .finally(() => setLoading(false));
-  };
-
-  useEffect(() => {
-    loadPayments();
-  }, []);
-
-  const addMethod = async (e) => {
-    e.preventDefault();
-    try {
-      const { data } = await api.post('/payments/methods', newMethod);
-      if (data.ok) {
-        notify(data.message, 'success');
-        setNewMethod({ ...newMethod, masked_reference: '' });
-        loadPayments();
-      }
-    } catch (err) {
-      notify(extractError(err), 'error');
-    }
-  };
-
-  const removeMethod = async (id) => {
-    try {
-      await api.delete(`/payments/methods/${id}`);
-      notify('Método de pago eliminado.', 'success');
-      loadPayments();
-    } catch (err) {
-      notify(extractError(err), 'error');
-    }
-  };
-
-  const payNextInstallment = async (planId) => {
-    try {
-      const { data } = await api.post(`/payments/plans/${planId}/pay`, {
-        payment_method_id: methods[0]?.id || null,
-      });
-      if (data.ok) {
-        notify(data.message, 'success');
-        loadPayments();
-      }
-    } catch (err) {
-      notify(extractError(err), 'error');
-    }
-  };
-
-  return (
-    <AppShell pageTitle="Mis Pagos y Planes de Cuotas">
-      <div className="fed-section-head">
-        <div className="fed-title-accent">
-          <div className="fed-accent-bar" />
-          <div>
-            <h1 className="fed-page-title">Mis Pagos, Métodos y Planes de Cuotas</h1>
-            <p className="fed-page-desc">
-              Administra tus formas de pago, revisa tus recibos y paga tus cuotas pendientes con un solo clic.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Planes de Pago del Usuario */}
-      <section style={{ marginBottom: '2rem' }}>
-        <h2 style={{ fontSize: '1.2rem', fontWeight: 900, marginBottom: '0.85rem' }}>
-          📑 Estado de Mis Planes de Pago por Curso
-        </h2>
-        {loading ? (
-          <div className="fed-card fed-card-pad">Cargando planes de pago...</div>
-        ) : plans.length === 0 ? (
-          <div className="fed-card fed-card-pad">Aún no tienes planes de pago registrados.</div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            {plans.map((plan) => {
-              const remaining = Math.max(0, Number(plan.total_amount) - Number(plan.paid_amount)).toFixed(2);
-              return (
-                <div key={plan.id} className="fed-card fed-top-stripe-orange fed-card-pad">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
-                    <div>
-                      <h3 style={{ margin: '0 0 0.25rem', fontSize: '1.12rem', fontWeight: 900 }}>
-                        {plan.course?.title || 'Curso'}
-                      </h3>
-                      <div style={{ fontSize: '0.86rem', color: 'var(--text-secondary)' }}>
-                        Modalidad de cobro: <strong>{plan.plan_type === 'cuotas' ? `En ${plan.installments_total} cuotas` : 'Pago Único'}</strong> ·
-                        Pagado: <strong>{Number(plan.paid_amount).toFixed(2)} Bs.</strong> de <strong>{Number(plan.total_amount).toFixed(2)} Bs.</strong>
-                      </div>
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
-                      <span className={`fed-badge ${plan.status === 'pagado' ? 'badge-green' : 'badge-orange'}`}>
-                        {plan.status === 'pagado' ? '✓ PAGADO COMPLETO' : `SALDO PENDIENTE: ${remaining} Bs.`}
-                      </span>
-                      {plan.status !== 'pagado' && (
-                        <button type="button" className="btn btn-sm btn-green" onClick={() => payNextInstallment(plan.id)}>
-                          💳 Pagar Siguiente Cuota ({plan.installments_paid + 1}/{plan.installments_total})
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {plan.transactions?.length > 0 && (
-                    <div className="fed-table-wrap" style={{ marginTop: '0.9rem' }}>
-                      <table className="fed-table">
-                        <thead>
-                          <tr>
-                            <th>Recibo</th>
-                            <th>Concepto</th>
-                            <th>Monto</th>
-                            <th>Fecha</th>
-                            <th>Estado</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {plan.transactions.map((tx) => (
-                            <tr key={tx.id}>
-                              <td><code>{tx.reference_code}</code></td>
-                              <td>{tx.notes || `Cuota ${tx.installment_number}`}</td>
-                              <td><strong>{Number(tx.amount).toFixed(2)} {tx.currency}</strong></td>
-                              <td>{(tx.paid_at || '').slice(0, 10)}</td>
-                              <td><span className="fed-badge badge-green">{tx.payment_status}</span></td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
-
-      {/* Gestión de Métodos de Pago */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(300px, 100%), 1fr))', gap: '1.5rem' }}>
-        <div className="fed-card fed-card-pad">
-          <h3 style={{ marginTop: 0 }}>Métodos de Pago Guardados</h3>
-          {methods.length === 0 ? (
-            <p style={{ color: 'var(--text-secondary)' }}>No tienes métodos guardados aún.</p>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-              {methods.map((m) => (
-                <div
-                  key={m.id}
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    padding: '0.75rem',
-                    border: '1px solid var(--border-line)',
-                    borderRadius: 10,
-                  }}
-                >
-                  <div>
-                    <strong>{m.provider_name}</strong> ({m.masked_reference})
-                    <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Titular: {m.holder_name}</div>
-                  </div>
-                  <button type="button" className="btn btn-sm btn-danger" onClick={() => removeMethod(m.id)}>
-                    Quitar
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <form className="fed-card fed-card-pad" onSubmit={addMethod}>
-          <h3 style={{ marginTop: 0 }}>Agregar Método de Pago</h3>
-          <div className="fed-field">
-            <label className="fed-label">Tipo de medio</label>
-            <select
-              className="fed-select"
-              value={newMethod.method_type}
-              onChange={(e) => setNewMethod({ ...newMethod, method_type: e.target.value })}
-            >
-              <option value="qr_banca">QR Simple Bancario</option>
-              <option value="tarjeta">Tarjeta Débito / Crédito</option>
-              <option value="transferencia">Transferencia Bancaria</option>
-            </select>
-          </div>
-          <div className="fed-field">
-            <label className="fed-label">Banco o Entidad</label>
-            <input
-              type="text"
-              className="fed-input"
-              value={newMethod.provider_name}
-              onChange={(e) => setNewMethod({ ...newMethod, provider_name: e.target.value })}
-              required
-            />
-          </div>
-          <div className="fed-field">
-            <label className="fed-label">Referencia o últimos 4 dígitos</label>
-            <input
-              type="text"
-              className="fed-input"
-              placeholder="Ej. **** 8821 o QR-70031990"
-              value={newMethod.masked_reference}
-              onChange={(e) => setNewMethod({ ...newMethod, masked_reference: e.target.value })}
-              required
-            />
-          </div>
-          <div className="fed-field">
-            <label className="fed-label">Nombre del Titular</label>
-            <input
-              type="text"
-              className="fed-input"
-              value={newMethod.holder_name}
-              onChange={(e) => setNewMethod({ ...newMethod, holder_name: e.target.value })}
-              required
-            />
-          </div>
-          <button type="submit" className="btn btn-primary btn-block">
-            Guardar Método de Pago
-          </button>
-        </form>
-      </div>
     </AppShell>
   );
 }
@@ -853,35 +719,29 @@ export function SocialProfilePage() {
   };
 
   return (
-    <AppShell pageTitle="Mi Emprendimiento y Vinculación Social">
+    <AppShell pageTitle="Mi Emprendimiento">
       <div className="fed-section-head">
-        <div className="fed-title-accent">
-          <div className="fed-accent-bar" />
-          <div>
-            <span className="fed-badge badge-green" style={{ marginBottom: '0.35rem' }}>
-              CU2 · VINCULACIÓN SOCIAL Y PRODUCTIVA
-            </span>
-            <h1 className="fed-page-title">Ficha de Mi Negocio / Emprendimiento</h1>
-            <p className="fed-page-desc">
-              Registra los datos de tu actividad económica para participar en ferias, becas y seguimiento de impacto social.
-            </p>
-          </div>
+        <div>
+          <h1 className="fed-page-title">Ficha de Mi Emprendimiento</h1>
+          <p className="fed-page-desc">
+            Registra los datos reales de tu negocio o taller para participar en ferias y seguimiento productivo.
+          </p>
         </div>
         {verifiedInfo && (
-          <span className="fed-badge badge-green" style={{ padding: '0.5rem 0.9rem' }}>
-            ✓ Verificado por {verifiedInfo.verifier?.name || 'Dirección FEDER'}
+          <span className="fed-badge badge-green" style={{ padding: '0.4rem 0.8rem' }}>
+            Ficha validada por {verifiedInfo.verifier?.name || 'Dirección FEDER'}
           </span>
         )}
       </div>
 
       <form className="fed-card fed-top-stripe-green fed-card-pad" onSubmit={onSave}>
-        <div className="fed-form-grid">
+        <div className="fed-form-grid-2">
           <div className="fed-field">
-            <label className="fed-label">Nombre de tu negocio, taller o actividad *</label>
+            <label className="fed-label">Nombre del negocio o taller *</label>
             <input
               type="text"
               className="fed-input"
-              placeholder="Ej. Taller de Costura San Juan"
+              placeholder="Ej. Panadería Artesanal San Juan"
               value={form.business_name}
               onChange={(e) => setForm({ ...form, business_name: e.target.value })}
               required
@@ -889,7 +749,7 @@ export function SocialProfilePage() {
           </div>
 
           <div className="fed-field">
-            <label className="fed-label">Rubro o Sector *</label>
+            <label className="fed-label">Rubro productivo *</label>
             <select
               className="fed-select"
               value={form.sector}
@@ -906,27 +766,27 @@ export function SocialProfilePage() {
           </div>
 
           <div className="fed-field">
-            <label className="fed-label">Etapa actual del emprendimiento</label>
+            <label className="fed-label">Etapa actual del negocio</label>
             <select
               className="fed-select"
               value={form.business_stage}
               onChange={(e) => setForm({ ...form, business_stage: e.target.value })}
             >
               <option value="idea">Idea por iniciar</option>
-              <option value="inicial">Recién empezando (menos de 1 año)</option>
+              <option value="inicial">Recién iniciando (menos de 1 año)</option>
               <option value="en_marcha">Negocio en marcha</option>
-              <option value="consolidacion">Negocio consolidado en crecimiento</option>
+              <option value="consolidacion">Negocio consolidado</option>
             </select>
           </div>
 
           <div className="fed-field">
-            <label className="fed-label">Asociación, Gremio o Convenio Aliado</label>
+            <label className="fed-label">Asociación o convenio aliado</label>
             <select
               className="fed-select"
               value={form.social_organization_id}
               onChange={(e) => setForm({ ...form, social_organization_id: e.target.value })}
             >
-              <option value="">Participante independiente (sin asociación)</option>
+              <option value="">Participante independiente</option>
               {organizations.map((org) => (
                 <option key={org.id} value={org.id}>
                   {org.name} ({org.municipality})
@@ -936,7 +796,7 @@ export function SocialProfilePage() {
           </div>
 
           <div className="fed-field">
-            <label className="fed-label">Empleos que genera (incluyéndote)</label>
+            <label className="fed-label">Empleos que genera</label>
             <input
               type="number"
               min="0"
@@ -960,7 +820,7 @@ export function SocialProfilePage() {
           </div>
 
           <div className="fed-field">
-            <label className="fed-label">Rango aproximado de ventas mensuales</label>
+            <label className="fed-label">Ventas mensuales aproximadas</label>
             <select
               className="fed-select"
               value={form.monthly_income_range}
@@ -975,11 +835,11 @@ export function SocialProfilePage() {
           </div>
 
           <div className="fed-field">
-            <label className="fed-label">Prioridad Social (opcional)</label>
+            <label className="fed-label">Grupo social prioritario (opcional)</label>
             <input
               type="text"
               className="fed-input"
-              placeholder="Ej. Jefatura de hogar, Joven emprendedor, Rural..."
+              placeholder="Ej. Jefatura de hogar, Emprendimiento rural..."
               value={form.vulnerability_group}
               onChange={(e) => setForm({ ...form, vulnerability_group: e.target.value })}
             />
@@ -987,7 +847,7 @@ export function SocialProfilePage() {
         </div>
 
         <div className="fed-field">
-          <label className="fed-label">¿Qué productos o servicios ofreces a tu comunidad?</label>
+          <label className="fed-label">Productos o servicios principales</label>
           <textarea
             rows="3"
             className="fed-textarea"
@@ -996,8 +856,9 @@ export function SocialProfilePage() {
           />
         </div>
 
-        <button type="submit" className="btn btn-green btn-lg" disabled={saving}>
-          {saving ? 'Guardando...' : '💾 Guardar Ficha de Mi Emprendimiento'}
+        <button type="submit" className="btn btn-green" disabled={saving}>
+          <Save size={16} />
+          <span>{saving ? 'Guardando...' : 'Guardar Ficha de Emprendimiento'}</span>
         </button>
       </form>
     </AppShell>
@@ -1057,47 +918,45 @@ export function ProfileEditPage() {
   };
 
   return (
-    <AppShell pageTitle="Mi Perfil y Fotografía">
+    <AppShell pageTitle="Mi Perfil">
       <div className="fed-section-head">
-        <div className="fed-title-accent">
-          <div className="fed-accent-bar" />
-          <div>
-            <h1 className="fed-page-title">Mi Perfil Personal y Fotografía</h1>
-            <p className="fed-page-desc">Mantén tu nombre y carnet actualizados para la emisión exacta de tus certificados.</p>
-          </div>
+        <div>
+          <h1 className="fed-page-title">Mi Perfil y Fotografía</h1>
+          <p className="fed-page-desc">Verifica tus datos personales para la emisión exacta de tus certificados.</p>
         </div>
       </div>
 
       <form className="fed-card fed-top-stripe-orange fed-card-pad" onSubmit={onSubmit}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1.15rem', flexWrap: 'wrap', marginBottom: '1.35rem' }}>
           {photoBase64 || (user?.profile_picture && !removePicture) ? (
             <img
               src={photoBase64 || assetUrl(user.profile_picture)}
               alt="Foto de perfil"
-              style={{ width: 88, height: 88, borderRadius: '50%', objectFit: 'cover', border: '3px solid var(--fed-orange)' }}
+              style={{ width: 76, height: 76, borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--fed-orange)' }}
             />
           ) : (
             <div
               style={{
-                width: 88,
-                height: 88,
+                width: 76,
+                height: 76,
                 borderRadius: '50%',
                 background: 'var(--fed-orange)',
                 color: '#fff',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: '1.8rem',
-                fontWeight: 900,
+                fontSize: '1.5rem',
+                fontWeight: 800,
               }}
             >
               {user?.initials || 'U'}
             </div>
           )}
 
-          <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
             <label className="btn btn-sm btn-primary" style={{ cursor: 'pointer' }}>
-              📷 Subir Nueva Foto
+              <Camera size={15} />
+              <span>Cambiar Fotografía</span>
               <input type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={onPhotoChange} />
             </label>
             {(user?.profile_picture || photoBase64) && (
@@ -1109,13 +968,14 @@ export function ProfileEditPage() {
                   setRemovePicture(true);
                 }}
               >
-                Quitar Foto
+                <Trash2 size={14} />
+                <span>Quitar Foto</span>
               </button>
             )}
           </div>
         </div>
 
-        <div className="fed-form-grid">
+        <div className="fed-form-grid-2">
           <div className="fed-field">
             <label className="fed-label">Nombre Completo *</label>
             <input
@@ -1127,7 +987,7 @@ export function ProfileEditPage() {
             />
           </div>
           <div className="fed-field">
-            <label className="fed-label">Documento de Identidad (CI)</label>
+            <label className="fed-label">Carnet de Identidad (CI)</label>
             <input
               type="text"
               className="fed-input"
@@ -1148,6 +1008,7 @@ export function ProfileEditPage() {
             <label className="fed-label">Fecha de Nacimiento</label>
             <input
               type="date"
+              max={maxAdultBirthDate()}
               className="fed-input"
               value={form.birth_date}
               onChange={(e) => setForm({ ...form, birth_date: e.target.value })}
@@ -1180,7 +1041,7 @@ export function ProfileEditPage() {
             <input
               type="password"
               className="fed-input"
-              placeholder="Dejar en blanco para mantener actual"
+              placeholder="Dejar vacío para mantener la actual"
               value={form.new_password}
               onChange={(e) => setForm({ ...form, new_password: e.target.value })}
             />
@@ -1196,8 +1057,9 @@ export function ProfileEditPage() {
           </div>
         </div>
 
-        <button type="submit" className="btn btn-primary btn-lg" disabled={saving}>
-          {saving ? 'Guardando...' : 'Guardar Cambios de Perfil'}
+        <button type="submit" className="btn btn-primary" disabled={saving}>
+          <Save size={16} />
+          <span>{saving ? 'Guardando...' : 'Guardar Cambios'}</span>
         </button>
       </form>
     </AppShell>

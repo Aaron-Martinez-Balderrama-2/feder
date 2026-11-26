@@ -313,14 +313,21 @@ class UserRbacApiController extends Controller
             'office_email' => ['nullable', 'email', 'max:120'],
             'office_hours' => ['nullable', 'string', 'max:180'],
             'office_map_embed' => ['required', 'string', 'max:120'],
+            'certificate_header_title' => ['nullable', 'string', 'max:180'],
+            'certificate_intro_text' => ['nullable', 'string', 'max:220'],
+            'certificate_body_text' => ['nullable', 'string', 'max:600'],
             'certificate_authority' => ['nullable', 'string', 'max:160'],
+            'certificate_authority_role' => ['nullable', 'string', 'max:160'],
+            'certificate_secondary_authority' => ['nullable', 'string', 'max:160'],
+            'certificate_secondary_role' => ['nullable', 'string', 'max:160'],
+            'default_phases_json' => ['nullable', 'string', 'max:1200'],
         ]);
 
         foreach ($validated as $k => $v) {
             Setting::setVal($k, $v ?? '');
         }
 
-        AuditLog::record('update', 'settings', 'Actualización de datos institucionales y ubicación de sede');
+        AuditLog::record('update', 'settings', 'Actualización de datos institucionales, plantilla de certificados y fases base');
 
         return response()->json([
             'ok' => true,

@@ -16,15 +16,10 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 */
 
-// 1. Endpoints Públicos y con Sesión Opcional
+// 1. Inicialización, Contador de Visitas e Inspección Pública QR (CU6)
 Route::middleware(['api.optional'])->group(function () {
     Route::post('/bootstrap', [PortalApiController::class, 'bootstrap']);
     Route::post('/visit', [PortalApiController::class, 'visit']);
-    Route::get('/search', [PortalApiController::class, 'globalSearch']);
-
-    Route::get('/home', [CurriculumApiController::class, 'homeOverview']);
-    Route::get('/courses', [CurriculumApiController::class, 'indexCatalog']);
-    Route::get('/courses/{slug}', [CurriculumApiController::class, 'showCourse']);
 
     // Inspección Pública de Certificados mediante Código QR (CU6)
     Route::get('/certificates/verify/{code}', [EvaluationCertificateApiController::class, 'verifyPublicQr']);
@@ -38,8 +33,13 @@ Route::prefix('auth')->group(function () {
     Route::post('/reset-password', [AuthApiController::class, 'resetPassword']);
 });
 
-// 3. Endpoints Protegidos para Usuarios Autenticados
+// 3. Endpoints Protegidos para Usuarios Autenticados (Acceso exclusivo con login)
 Route::middleware(['api.auth'])->group(function () {
+    Route::get('/search', [PortalApiController::class, 'globalSearch']);
+    Route::get('/home', [CurriculumApiController::class, 'homeOverview']);
+    Route::get('/courses', [CurriculumApiController::class, 'indexCatalog']);
+    Route::get('/courses/{slug}', [CurriculumApiController::class, 'showCourse']);
+
     Route::post('/auth/logout', [AuthApiController::class, 'logout']);
     Route::post('/auth/profile', [AuthApiController::class, 'updateProfile']);
     Route::post('/auth/preferences', [AuthApiController::class, 'updatePreferences']);
@@ -107,14 +107,18 @@ Route::middleware(['api.auth'])->group(function () {
     // Evaluaciones de Módulos y Feria Empresarial (CU5)
     Route::middleware(['permission:evaluations.manage,classroom.operate'])->group(function () {
         Route::post('/manage/courses/{course}/evaluations', [EvaluationCertificateApiController::class, 'storeEvaluation']);
+        Route::put('/manage/evaluations/{evaluation}', [EvaluationCertificateApiController::class, 'updateEvaluation']);
         Route::delete('/manage/evaluations/{evaluation}', [EvaluationCertificateApiController::class, 'destroyEvaluation']);
         Route::post('/manage/courses/{course}/fair-evaluate', [EvaluationCertificateApiController::class, 'evaluateFairParticipation']);
     });
 
-    // Emisión y Subida de Certificados Imprimibles con QR (CU6)
+    // Gestión Integral, Emisión, Edición, Reemplazo y Eliminación de Certificados Imprimibles con QR (CU6)
     Route::middleware(['permission:certificates.manage,classroom.operate'])->group(function () {
+        Route::get('/manage/certificates', [EvaluationCertificateApiController::class, 'indexCertificates']);
         Route::post('/manage/courses/{course}/certificates', [EvaluationCertificateApiController::class, 'issueOrUploadCertificate']);
+        Route::post('/manage/certificates/{certificate}/update', [EvaluationCertificateApiController::class, 'updateCertificate']);
         Route::post('/manage/certificates/{certificate}/toggle', [EvaluationCertificateApiController::class, 'revokeCertificate']);
+        Route::delete('/manage/certificates/{certificate}', [EvaluationCertificateApiController::class, 'destroyCertificate']);
     });
 
     // Categorías y Periodos Académicos Editables (CU3)
