@@ -212,7 +212,8 @@ class BlackBoxEndToEndTest extends TestCase
             ]);
             $enroll->assertStatus(200)->assertJsonPath('ok', true);
 
-            // CU4: Subir material por fase y subfase, foro de preguntas, asistencia y pulso de tiempo
+            // CU4: Subir material en Fase 1 y Fase 2; verificar BLOQUEO estricto de Fase 2 hasta completar/aprobar Fase 1
+            $secondModId = $modules[1]['id'];
             $fakePdf = UploadedFile::fake()->create('guia_costeo.pdf', 120, 'application/pdf');
             $matRes = $this->withHeaders($instHeaders)->post("/api/manage/courses/{$courseId}/materials", [
                 'title' => 'Plantilla de Costeo Textil',
@@ -226,6 +227,47 @@ class BlackBoxEndToEndTest extends TestCase
             if ($matRes->json('material.file_path')) {
                 $uploadedPathsToClean[] = public_path($matRes->json('material.file_path'));
             }
+
+            $matRes2 = $this->withHeaders($instHeaders)->post("/api/manage/courses/{$courseId}/materials", [
+                'title' => 'Material Confidencial Fase 2',
+                'module_id' => $secondModId,
+                'resource_type' => 'guia_ligera',
+                'offline_summary' => 'Solo visible tras aprobar Fase 1.',
+            ], ['Accept' => 'application/json']);
+            $matRes2->assertStatus(201);
+
+            // Participante entra al aula ANTES de completar Fase 1 -> NO debe ver material de Fase 2
+            $classroomLocked = $this->withHeaders($stuHeaders)->getJson("/api/classroom/{$courseId}");
+            $classroomLocked->assertStatus(200)
+                ->assertJsonPath('course.modules.0.is_unlocked', true)
+                ->assertJsonPath('course.modules.1.is_unlocked', false);
+            $matTitlesLocked = collect($classroomLocked->json('course.materials'))->pluck('title')->all();
+            $this->assertContains('Plantilla de Costeo Textil', $matTitlesLocked);
+            $this->assertNotContains('Material Confidencial Fase 2', $matTitlesLocked);
+
+            // Intentar evaluar Fase 2 antes de habilitar -> bloqueado 403
+            $evalMod2 = $this->withHeaders($instHeaders)->postJson("/api/manage/courses/{$courseId}/evaluations", [
+                'module_id' => $secondModId,
+                'title' => 'Examen Fase 2',
+                'passing_score' => 60,
+                'max_attempts' => 2,
+                'questions' => [
+                    [
+                        'question_text' => 'Pregunta Fase 2',
+                        'question_type' => 'true_false',
+                        'options' => [['key' => 'V', 'text' => 'Verdadero'], ['key' => 'F', 'text' => 'Falso']],
+                        'correct_option' => 'V',
+                        'points' => 100,
+                    ],
+                ],
+            ]);
+            $evalMod2->assertStatus(201);
+            $eval2Id = $evalMod2->json('evaluation.id');
+            $q2Id = $evalMod2->json('evaluation.questions.0.id');
+
+            $this->withHeaders($stuHeaders)->postJson("/api/evaluations/{$eval2Id}/attempt", [
+                'answers' => [$q2Id => 'V'],
+            ])->assertStatus(403);
 
             $threadRes = $this->withHeaders($stuHeaders)->postJson("/api/classroom/{$courseId}/forum", [
                 'title' => '¿Cómo calculo merma de tela?',
@@ -298,6 +340,17 @@ class BlackBoxEndToEndTest extends TestCase
                 ->assertJsonPath('attempt.percentage', 100)
                 ->assertJsonPath('attempt.passed', true);
 
+            // Instructor marca como completada la Fase 1 -> ahora que aprobó evaluación, Fase 2 y su material se desbloquean
+            $this->withHeaders($instHeaders)
+                ->postJson("/api/manage/modules/{$firstModId}/toggle-complete")
+                ->assertStatus(200)
+                ->assertJsonPath('module.is_completed', true);
+
+            $classroomUnlocked = $this->withHeaders($stuHeaders)->getJson("/api/classroom/{$courseId}");
+            $classroomUnlocked->assertStatus(200)->assertJsonPath('course.modules.1.is_unlocked', true);
+            $matTitlesUnlocked = collect($classroomUnlocked->json('course.materials'))->pluck('title')->all();
+            $this->assertContains('Material Confidencial Fase 2', $matTitlesUnlocked);
+
             $this->withHeaders($stuHeaders)
                 ->postJson("/api/classroom/{$courseId}/fair-register", ['project_title' => 'Uniformes Escolares Lucía'])
                 ->assertStatus(200);
@@ -344,12 +397,17 @@ class BlackBoxEndToEndTest extends TestCase
                 'certificate_authority_role' => 'Dirección General FEDER',
             ])->assertStatus(200);
 
-            // Inspección pública mediante Código QR sin login refleja los cambios de plantilla y edición
+            // Inspección pública mediante Código QR Y por Cédula de Identidad (CI) sin login (RF-05.1 + RF-05.3)
             $this->getJson("/api/certificates/verify/{$customQr}")
                 ->assertStatus(200)
                 ->assertJsonPath('valid', true)
                 ->assertJsonPath('certificate.participant_name', 'Lucía Quispe Condori')
                 ->assertJsonPath('settings.certificate_header_title', 'CERTIFICADO OFICIAL PERSONALIZADO');
+
+            $this->getJson('/api/certificates/verify/9482716')
+                ->assertStatus(200)
+                ->assertJsonPath('valid', true)
+                ->assertJsonPath('certificate.verification_code', $customQr);
 
             // Búsqueda global autenticada y Reportes reales + CSV sin columnas de cobros
             $this->withHeaders($adminHeaders)->getJson('/api/search?q=Textil')

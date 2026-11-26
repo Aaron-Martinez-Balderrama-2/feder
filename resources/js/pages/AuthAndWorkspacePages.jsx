@@ -258,6 +258,17 @@ export function RegisterPage() {
                   <option value="Prefiero no decirlo">Prefiero no decirlo</option>
                 </select>
               </div>
+              <div className="fed-field" style={{ gridColumn: '1 / -1' }}>
+                <label className="fed-label">Dirección / Municipio *</label>
+                <input
+                  type="text"
+                  className="fed-input"
+                  placeholder="Ej. Barrio Los Olivos, Montero / Santa Cruz"
+                  value={form.city}
+                  onChange={(e) => setForm({ ...form, city: e.target.value })}
+                  required
+                />
+              </div>
               <div className="fed-field">
                 <label className="fed-label">Contraseña (mín. 8 caracteres) *</label>
                 <input

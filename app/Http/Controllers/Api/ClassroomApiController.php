@@ -85,6 +85,13 @@ class ClassroomApiController extends Controller
             ], 403);
         }
 
+        if (!$canManage && $course->end_date && $course->end_date->copy()->endOfDay()->isPast() && $enrollment?->status !== 'completed') {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Esta capacitación concluyó su fecha límite y cerró su aula activa.',
+            ], 403);
+        }
+
         $course->load([
             'category:id,name,slug,icon',
             'instructor:id,name,email,profile_picture',
@@ -93,12 +100,19 @@ class ClassroomApiController extends Controller
             'materials.uploader:id,name',
         ]);
 
-        // Evaluaciones del curso (ocultando correct_option a participantes hasta después de responder)
+        // RF-02.1 & RF-02.2: Bloqueo secuencial estricto de Fases para Participantes.
+        $accessState = self::resolveModuleAccess($course, $user->id, $canManage);
+        $unlockedModuleIds = $accessState['unlocked_ids'];
+        $moduleAccessMap = $accessState['map'];
+
+        // Evaluaciones del curso: ocultar evaluaciones de fases bloqueadas a participantes
         $evaluations = ModuleEvaluation::with('questions')
             ->where('course_id', $course->id)
             ->when(!$canManage, fn ($q) => $q->where('is_published', true))
             ->orderBy('module_id')
             ->get()
+            ->filter(fn ($ev) => $canManage || !$ev->module_id || in_array((int) $ev->module_id, $unlockedModuleIds, true))
+            ->values()
             ->map(function ($ev) use ($user, $canManage) {
                 $myAttempts = EvaluationAttempt::where('evaluation_id', $ev->id)
                     ->where('user_id', $user->id)
@@ -128,6 +142,33 @@ class ClassroomApiController extends Controller
                     'has_passed' => $myAttempts->contains('passed', true),
                 ];
             });
+
+        // Filtrar materiales y subfases para que un estudiante NO pueda acceder al contenido ni enlaces de fases bloqueadas
+        if (!$canManage) {
+            $visibleMaterials = $course->materials
+                ->filter(fn ($m) => !$m->module_id || in_array((int) $m->module_id, $unlockedModuleIds, true))
+                ->values();
+            $course->setRelation('materials', $visibleMaterials);
+
+            $filteredModules = $course->modules->map(function ($mod) use ($moduleAccessMap) {
+                $info = $moduleAccessMap[$mod->id] ?? ['is_unlocked' => false, 'lock_reason' => 'Fase bloqueada'];
+                $mod->setAttribute('is_unlocked', $info['is_unlocked']);
+                $mod->setAttribute('lock_reason', $info['lock_reason']);
+                if (!$info['is_unlocked']) {
+                    // Ocultar contenido detallado y enlaces de subfases mientras la fase siga bloqueada
+                    $mod->setRelation('classes', collect());
+                }
+                return $mod;
+            });
+            $course->setRelation('modules', $filteredModules);
+        } else {
+            $staffModules = $course->modules->map(function ($mod) {
+                $mod->setAttribute('is_unlocked', true);
+                $mod->setAttribute('lock_reason', null);
+                return $mod;
+            });
+            $course->setRelation('modules', $staffModules);
+        }
 
         // Hilos de Foro del curso y sus respuestas
         $forumThreads = ForumThread::with([
@@ -233,6 +274,7 @@ class ClassroomApiController extends Controller
             'ok' => true,
             'can_manage' => $canManage,
             'course' => $course,
+            'unlocked_module_ids' => $unlockedModuleIds,
             'enrollment' => $enrollment,
             'evaluations' => $evaluations,
             'forum_threads' => $forumThreads,
@@ -358,6 +400,17 @@ class ClassroomApiController extends Controller
         $moduleId = $validated['module_id'] ?? null;
         if (!$moduleId && !empty($validated['class_id'])) {
             $moduleId = CourseClass::where('id', $validated['class_id'])->value('module_id');
+        }
+
+        $isStaff = $user->isAdmin() || $user->isDirector() || ($user->isInstructor() && (int) $course->instructor_id === (int) $user->id);
+        if ($moduleId && !$isStaff) {
+            $accessState = self::resolveModuleAccess($course, $user->id, false);
+            if (!in_array((int) $moduleId, $accessState['unlocked_ids'], true)) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'Esta fase todavía está bloqueada. Debes completar primero la fase anterior.',
+                ], 403);
+            }
         }
 
         $thread = ForumThread::create([
@@ -499,6 +552,14 @@ class ClassroomApiController extends Controller
             ], 403);
         }
 
+        $accessState = self::resolveModuleAccess($course, $user->id, false);
+        if (!in_array((int) $class->module_id, $accessState['unlocked_ids'], true)) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'No puedes marcar asistencia en una fase que aún no ha sido habilitada.',
+            ], 403);
+        }
+
         if (!$class->is_attendance_active) {
             return response()->json([
                 'ok' => false,
@@ -573,5 +634,73 @@ class ClassroomApiController extends Controller
         if (!$enrolled) {
             abort(403, 'Debes pertenecer a este curso para participar.');
         }
+    }
+
+    /**
+     * Resuelve qué fases están desbloqueadas para un participante (RF-02.1 + RF-02.2):
+     * - Fase 1 siempre habilitada para inscritos.
+     * - Fase K (>1) requiere que el instructor/admin haya marcado como completada la Fase K-1
+     *   (is_completed = true o todas sus subfases marcadas como dictadas) Y que el participante
+     *   haya aprobado la evaluación de la Fase K-1 (si dicha fase tiene evaluación publicada).
+     */
+    public static function resolveModuleAccess(Course $course, int $userId, bool $canManage): array
+    {
+        $modules = $course->relationLoaded('modules')
+            ? $course->modules
+            : $course->modules()->with('classes')->get();
+
+        $unlockedIds = [];
+        $map = [];
+
+        if ($canManage) {
+            foreach ($modules as $mod) {
+                $unlockedIds[] = (int) $mod->id;
+                $map[$mod->id] = ['is_unlocked' => true, 'lock_reason' => null];
+            }
+            return ['unlocked_ids' => $unlockedIds, 'map' => $map];
+        }
+
+        $allUnlockedSoFar = true;
+        $pendingReason = null;
+
+        foreach ($modules->values() as $idx => $mod) {
+            if ($idx === 0 || $allUnlockedSoFar) {
+                $unlockedIds[] = (int) $mod->id;
+                $map[$mod->id] = ['is_unlocked' => true, 'lock_reason' => null];
+            } else {
+                $map[$mod->id] = ['is_unlocked' => false, 'lock_reason' => $pendingReason];
+                continue;
+            }
+
+            // Verificar si esta fase habilita la siguiente
+            $classes = $mod->relationLoaded('classes') ? $mod->classes : $mod->classes()->get();
+            $allClassesCompleted = $classes->count() > 0 && $classes->every(fn ($c) => (bool) $c->is_completed);
+            $phaseMarkedDone = (bool) $mod->is_completed || $allClassesCompleted;
+
+            if (!$phaseMarkedDone) {
+                $allUnlockedSoFar = false;
+                $pendingReason = "Bloqueada: el instructor o administrador aún debe marcar como completada la Fase " . ($idx + 1) . " ({$mod->title}).";
+                continue;
+            }
+
+            // Verificar evaluaciones publicadas de esta fase (RF-02.2)
+            $evalIds = ModuleEvaluation::where('module_id', $mod->id)
+                ->where('is_published', true)
+                ->pluck('id');
+
+            foreach ($evalIds as $evId) {
+                $passed = EvaluationAttempt::where('evaluation_id', $evId)
+                    ->where('user_id', $userId)
+                    ->where('passed', true)
+                    ->exists();
+                if (!$passed) {
+                    $allUnlockedSoFar = false;
+                    $pendingReason = "Bloqueada: debes aprobar la evaluación de la Fase " . ($idx + 1) . " ({$mod->title}) para continuar.";
+                    break;
+                }
+            }
+        }
+
+        return ['unlocked_ids' => $unlockedIds, 'map' => $map];
     }
 }

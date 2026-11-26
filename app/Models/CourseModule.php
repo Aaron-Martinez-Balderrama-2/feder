@@ -18,6 +18,8 @@ class CourseModule extends Model
         'position',
         'prerequisite_module_id',
         'weight_pct',
+        'is_completed',
+        'completed_at',
     ];
 
     protected function casts(): array
@@ -25,6 +27,8 @@ class CourseModule extends Model
         return [
             'position' => 'integer',
             'weight_pct' => 'integer',
+            'is_completed' => 'boolean',
+            'completed_at' => 'datetime',
         ];
     }
 

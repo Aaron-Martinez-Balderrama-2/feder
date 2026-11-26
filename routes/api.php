@@ -83,9 +83,10 @@ Route::middleware(['api.auth'])->group(function () {
         Route::put('/manage/courses/{course}', [CurriculumApiController::class, 'updateCourse']);
         Route::delete('/manage/courses/{course}', [CurriculumApiController::class, 'destroyCourse']);
 
-        // Fases editables
+        // Fases editables y habilitación secuencial
         Route::post('/manage/courses/{course}/modules', [CurriculumApiController::class, 'storeModule']);
         Route::put('/manage/modules/{module}', [CurriculumApiController::class, 'updateModule']);
+        Route::post('/manage/modules/{module}/toggle-complete', [CurriculumApiController::class, 'toggleModuleComplete']);
         Route::delete('/manage/modules/{module}', [CurriculumApiController::class, 'destroyModule']);
 
         // Subfases / clases editables

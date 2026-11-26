@@ -626,6 +626,42 @@ class CurriculumApiController extends Controller
         ]);
     }
 
+    public function toggleModuleComplete(Request $request, CourseModule $module): JsonResponse
+    {
+        $course = $module->course;
+        $this->authorizeCourseOperation($request->user(), $course);
+
+        $newState = !$module->is_completed;
+        $module->update([
+            'is_completed' => $newState,
+            'completed_at' => $newState ? now() : null,
+        ]);
+
+        // Sincronizar también el estado de las subfases internas si el docente completó toda la fase
+        if ($newState) {
+            $module->classes()->where('is_completed', false)->update([
+                'is_completed' => true,
+                'completed_at' => now(),
+            ]);
+        }
+
+        $pct = $course->recalculateProgress();
+        AuditLog::record(
+            'update',
+            'course_modules',
+            "Fase «{$module->title}» marcada como " . ($newState ? 'completada (habilita siguiente fase)' : 'en curso')
+        );
+
+        return response()->json([
+            'ok' => true,
+            'module' => $module->fresh('classes'),
+            'progress_pct' => $pct,
+            'message' => $newState
+                ? "Fase «{$module->title}» marcada como completada. Siguiente fase habilitada para los participantes que aprobaron."
+                : "Fase «{$module->title}» marcada nuevamente como en progreso.",
+        ]);
+    }
+
     public function destroyModule(Request $request, CourseModule $module): JsonResponse
     {
         $course = $module->course;
@@ -712,7 +748,8 @@ class CurriculumApiController extends Controller
 
     public function toggleClassComplete(Request $request, CourseClass $class): JsonResponse
     {
-        $course = $class->module->course;
+        $module = $class->module;
+        $course = $module->course;
         $this->authorizeCourseOperation($request->user(), $course);
 
         $newState = !$class->is_completed;
@@ -721,11 +758,21 @@ class CurriculumApiController extends Controller
             'completed_at' => $newState ? now() : null,
         ]);
 
+        // Si todas las subfases de la fase quedan dictadas, marcar automáticamente la fase como completada
+        $totalInMod = $module->classes()->count();
+        $doneInMod = $module->classes()->where('is_completed', true)->count();
+        $moduleCompleted = $totalInMod > 0 && $totalInMod === $doneInMod;
+        $module->update([
+            'is_completed' => $moduleCompleted,
+            'completed_at' => $moduleCompleted ? ($module->completed_at ?? now()) : null,
+        ]);
+
         $pct = $course->recalculateProgress();
 
         return response()->json([
             'ok' => true,
             'class' => $class->fresh(),
+            'module_completed' => $moduleCompleted,
             'progress_pct' => $pct,
             'message' => $newState ? 'Subfase marcada como dictada/avanzada.' : 'Subfase reabierta como pendiente.',
         ]);

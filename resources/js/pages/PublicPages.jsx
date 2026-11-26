@@ -338,9 +338,9 @@ export function CourseDetailPage() {
         </Link>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(300px, 100%), 1fr))', gap: '1.25rem', alignItems: 'start' }}>
+      <div className="fed-detail-grid">
         {/* Información Principal y Fases */}
-        <div style={{ gridColumn: 'span 2', minWidth: 0 }}>
+        <div style={{ minWidth: 0 }}>
           <div className="fed-card fed-top-stripe-orange fed-card-pad" style={{ marginBottom: '1.25rem' }}>
             <div style={{ display: 'flex', gap: '0.45rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
               <span className="fed-badge badge-orange">{course.category?.name || 'Programa'}</span>
@@ -522,9 +522,9 @@ export function VerifyCertificatePage() {
             <span className="fed-badge badge-green" style={{ marginBottom: '0.4rem' }}>
               Consulta Pública Oficial
             </span>
-            <h1 className="fed-page-title">Verificador de Certificados Digitales QR</h1>
+            <h1 className="fed-page-title">Verificador de Certificados Digitales QR y Cédula (CI)</h1>
             <p className="fed-page-desc">
-              Ingresa el código impreso en el certificado o escanea su código QR para comprobar su validez en tiempo real.
+              Ingresa el código QR único o la Cédula de Identidad (CI) del participante para verificar la autenticidad del certificado.
             </p>
           </div>
         </div>
@@ -538,11 +538,11 @@ export function VerifyCertificatePage() {
           }}
         >
           <div className="fed-field" style={{ flex: '1 1 260px', marginBottom: 0 }}>
-            <label className="fed-label">Código Único del Certificado</label>
+            <label className="fed-label">Código Único QR o Cédula de Identidad (CI)</label>
             <input
               type="text"
               className="fed-input"
-              placeholder="Ingresa el código del certificado (ej. FEDER-2026-MF001)"
+              placeholder="Ej. FEDER-2026-MF001 o CI 8392014"
               value={code}
               onChange={(e) => setCode(e.target.value)}
               required

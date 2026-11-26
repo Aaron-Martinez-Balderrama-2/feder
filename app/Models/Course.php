@@ -170,6 +170,10 @@ class Course extends Model
             return false;
         }
 
+        if ($this->end_date && $this->end_date->copy()->endOfDay()->isPast()) {
+            return false;
+        }
+
         if ($this->progress_pct >= 50) {
             return false;
         }
@@ -180,7 +184,7 @@ class Course extends Model
     public function recalculateProgress(): int
     {
         $total = $this->classes()->count();
-        $completed = $this->classes()->where('is_completed', true)->count();
+        $completed = $this->classes()->where('course_classes.is_completed', true)->count();
         $pct = $total > 0 ? (int) round(($completed / $total) * 100) : 0;
 
         $this->update(['progress_pct' => $pct]);

@@ -161,6 +161,16 @@ class EvaluationCertificateApiController extends Controller
             ], 403);
         }
 
+        if (!$user->isAdmin() && !$user->isDirector() && !($user->isInstructor() && (int) $course->instructor_id === (int) $user->id)) {
+            $accessState = ClassroomApiController::resolveModuleAccess($course, $user->id, false);
+            if ($evaluation->module_id && !in_array((int) $evaluation->module_id, $accessState['unlocked_ids'], true)) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'Esta evaluación corresponde a una fase bloqueada. Completa y aprueba la fase anterior primero.',
+                ], 403);
+            }
+        }
+
         $previousCount = EvaluationAttempt::where('evaluation_id', $evaluation->id)
             ->where('user_id', $user->id)
             ->count();
@@ -551,7 +561,7 @@ class EvaluationCertificateApiController extends Controller
     }
 
     /**
-     * Inspección Pública de Certificados mediante Código QR (CU6 - Acceso público sin login).
+     * Inspección Pública de Certificados mediante Código QR o Cédula de Identidad (RF-05.1 + RF-05.3 + CU6).
      */
     public function verifyPublicQr(string $code): JsonResponse
     {
@@ -564,15 +574,42 @@ class EvaluationCertificateApiController extends Controller
             ->whereRaw('UPPER(verification_code) = ?', [$cleanCode])
             ->first();
 
+        $allByCi = collect();
+        if (!$cert) {
+            $allByCi = Certificate::with([
+                'user:id,name,id_document',
+                'course:id,title,slug,hours_duration,modality,start_date,end_date',
+                'issuer:id,name',
+            ])
+                ->whereHas('user', fn ($u) => $u->whereRaw('UPPER(id_document) = ?', [$cleanCode]))
+                ->orderByDesc('issued_at')
+                ->get();
+            $cert = $allByCi->first();
+        }
+
         if (!$cert) {
             return response()->json([
                 'ok' => false,
                 'valid' => false,
-                'message' => 'No se encontró ningún certificado registrado con ese código de verificación.',
+                'message' => 'No se encontró ningún certificado registrado con ese código QR ni con esa Cédula de Identidad (CI).',
             ], 404);
         }
 
         $allSettings = Setting::pluck('setting_value', 'setting_key')->toArray();
+        $serialize = fn ($c) => [
+            'verification_code' => $c->verification_code,
+            'status' => $c->status,
+            'issued_at' => $c->issued_at?->format('Y-m-d'),
+            'final_grade' => $c->final_grade,
+            'attendance_pct' => $c->attendance_pct,
+            'hours_completed' => $c->hours_completed,
+            'custom_file_path' => $c->custom_file_path,
+            'participant_name' => $c->user?->name,
+            'participant_document' => $c->user?->id_document,
+            'course_title' => $c->course?->title,
+            'course_modality' => $c->course?->modality,
+            'issuer_name' => $c->issuer?->name,
+        ];
 
         return response()->json([
             'ok' => true,
@@ -580,20 +617,8 @@ class EvaluationCertificateApiController extends Controller
             'institution' => $allSettings['institution_name'] ?? 'FEDER',
             'authority' => $allSettings['certificate_authority'] ?? 'Dirección Ejecutiva FEDER',
             'settings' => $allSettings,
-            'certificate' => [
-                'verification_code' => $cert->verification_code,
-                'status' => $cert->status,
-                'issued_at' => $cert->issued_at?->format('Y-m-d'),
-                'final_grade' => $cert->final_grade,
-                'attendance_pct' => $cert->attendance_pct,
-                'hours_completed' => $cert->hours_completed,
-                'custom_file_path' => $cert->custom_file_path,
-                'participant_name' => $cert->user?->name,
-                'participant_document' => $cert->user?->id_document,
-                'course_title' => $cert->course?->title,
-                'course_modality' => $cert->course?->modality,
-                'issuer_name' => $cert->issuer?->name,
-            ],
+            'certificate' => $serialize($cert),
+            'matching_certificates' => $allByCi->count() > 1 ? $allByCi->map($serialize)->values() : [],
         ]);
     }
 }

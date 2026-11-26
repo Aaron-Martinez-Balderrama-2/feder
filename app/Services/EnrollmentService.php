@@ -28,7 +28,15 @@ class EnrollmentService
                 return [
                     'ok' => false,
                     'code' => 'closed',
-                    'message' => 'Esta oferta académica no está disponible para inscripciones.',
+                    'message' => 'Esta capacitación no está disponible para inscripciones.',
+                ];
+            }
+
+            if ($course->end_date && $course->end_date->copy()->endOfDay()->isPast()) {
+                return [
+                    'ok' => false,
+                    'code' => 'expired',
+                    'message' => 'Esta capacitación ya concluyó su fecha límite y dejó de estar disponible.',
                 ];
             }
 

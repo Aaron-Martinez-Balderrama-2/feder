@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 320">
+  <defs>
+    <linearGradient id="bg3" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#221E1B"/>
+      <stop offset="100%" stop-color="#1E252B"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="320" fill="url(#bg3)"/>
+  <circle cx="530" cy="70" r="105" fill="#F7780F" opacity="0.16"/>
+  <circle cx="120" cy="260" r="90" fill="#12963D" opacity="0.14"/>
+  <rect x="44" y="48" width="96" height="6" rx="3" fill="#EA6A0A"/>
+  <g transform="translate(245, 70)" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="75" cy="70" r="52" stroke="#FDBA74"/>
+    <circle cx="75" cy="70" r="30" stroke="#86EFAC"/>
+    <circle cx="75" cy="70" r="10" fill="#EA6A0A" stroke="none"/>
+    <path d="M112 33L138 7M124 7h14v14" stroke="#FFFFFF"/>
+  </g>
+  <rect x="44" y="244" width="552" height="32" rx="8" fill="rgba(255,255,255,0.06)"/>
+  <text x="60" y="265" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="600" fill="#E2E8F0">MARKETING DIGITAL · CATÁLOGO Y COMERCIO LOCAL</text>
+</svg>

@@ -362,7 +362,7 @@ class DatabaseSeeder extends Seeder
                 'classroom_location' => 'Aula Planta Baja · Sede FEDER Módulo 236',
                 'hours_duration' => 60,
                 'requires_fair_participation' => true,
-                'cover_image' => 'assets/img/demo/course1.png',
+                'cover_image' => 'assets/img/covers/gestion-microempresas.svg',
                 'color' => '#F7780F',
                 'start_date' => now()->subDays(12)->format('Y-m-d'),
                 'end_date' => now()->addDays(35)->format('Y-m-d'),
@@ -383,7 +383,7 @@ class DatabaseSeeder extends Seeder
                 'classroom_location' => 'Sala Taller 2 · Sede FEDER',
                 'hours_duration' => 48,
                 'requires_fair_participation' => false,
-                'cover_image' => 'assets/img/demo/course2.png',
+                'cover_image' => 'assets/img/covers/finanzas-empresariales.svg',
                 'color' => '#13AC44',
                 'start_date' => now()->subDays(7)->format('Y-m-d'),
                 'end_date' => now()->addDays(28)->format('Y-m-d'),
@@ -404,7 +404,7 @@ class DatabaseSeeder extends Seeder
                 'classroom_location' => 'Aula Virtual FEDER',
                 'hours_duration' => 50,
                 'requires_fair_participation' => true,
-                'cover_image' => 'assets/img/demo/course3.png',
+                'cover_image' => 'assets/img/covers/marketing-digital.svg',
                 'color' => '#334155',
                 'start_date' => now()->subDays(3)->format('Y-m-d'),
                 'end_date' => now()->addDays(40)->format('Y-m-d'),
@@ -455,7 +455,7 @@ class DatabaseSeeder extends Seeder
                             'completed_at' => $done ? now()->subDays(2) : null,
                         ]);
 
-                        if ($idx === 0 && $sub === 1) {
+                        if ($idx <= 1 && $sub === 1) {
                             CourseMaterial::firstOrCreate(
                                 ['course_id' => $course->id, 'title' => "Guía Rápida Imprimible - {$phaseName}"],
                                 [
@@ -529,7 +529,7 @@ class DatabaseSeeder extends Seeder
                 'period_id' => $period->id,
                 'price' => 0.00,
                 'installments_allowed' => 1,
-                'cover_image' => 'assets/img/demo/course2.png',
+                'cover_image' => 'assets/img/covers/finanzas-empresariales.svg',
                 'color' => '#F7780F',
             ]);
             CoursePrerequisite::firstOrCreate([

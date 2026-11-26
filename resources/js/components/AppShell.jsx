@@ -74,7 +74,7 @@ export function AppearancePopover({ prefs, updateVisualPreferences }) {
         title="Opciones de lectura, modo día/noche y tamaño de texto"
       >
         <SlidersHorizontal size={16} />
-        <span>Vista</span>
+        <span className="fed-a11y-label">Vista</span>
       </button>
 
       {open && (
@@ -256,12 +256,23 @@ export function AppShell({ children, pageTitle = 'FEDER' }) {
 
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => (typeof window !== 'undefined' ? window.innerWidth <= 960 : false));
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState(null);
   const [searchOpen, setSearchOpen] = useState(false);
 
   const searchRef = useRef(null);
   const firstMountRef = useRef(true);
+
+  useEffect(() => {
+    const onResize = () => {
+      const mob = window.innerWidth <= 960;
+      setIsMobile(mob);
+      if (!mob) setMobileOpen(false);
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   useEffect(() => {
     setMobileOpen(false);
@@ -351,36 +362,47 @@ export function AppShell({ children, pageTitle = 'FEDER' }) {
       0);
 
   return (
-    <div className="fed-app-layout">
+    <div className={`fed-app-layout ${collapsed && !isMobile ? 'sidebar-collapsed' : ''}`}>
       {mobileOpen && <div className="fed-mobile-backdrop" onClick={() => setMobileOpen(false)} />}
 
-      {/* BARRA LATERAL ESTRUCTURADA Y SERENA */}
-      <aside className={`fed-sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
+      {/* BARRA LATERAL FIJA Y RESPONSIVA */}
+      <aside className={`fed-sidebar ${collapsed && !isMobile ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
         <div className="fed-sidebar-brand">
           <Link to="/mi-aula" style={{ display: 'flex', alignItems: 'center', gap: '0.7rem', minWidth: 0, flex: 1 }}>
             <img src={assetUrl('favicon.png')} alt="FEDER" className="fed-brand-logo" />
-            {!collapsed && (
+            {(!collapsed || isMobile) && (
               <div style={{ minWidth: 0 }}>
                 <span className="fed-brand-title">FEDER</span>
                 <span className="fed-brand-sub">Formación Gratuita</span>
               </div>
             )}
           </Link>
+          {isMobile && mobileOpen && (
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              style={{ color: '#CBD5E1', padding: '0.25rem' }}
+              onClick={() => setMobileOpen(false)}
+              aria-label="Cerrar menú"
+            >
+              <PanelLeftClose size={18} />
+            </button>
+          )}
         </div>
 
         <nav className="fed-sidebar-nav" aria-label="Menú principal">
           {workspaceMenus.length > 0 && (
             <div>
-              {!collapsed && <div className="fed-nav-group-label">Mi Espacio</div>}
+              {(!collapsed || isMobile) && <div className="fed-nav-group-label">Mi Espacio</div>}
               {workspaceMenus.map((item) => (
                 <Link
                   key={item.id || item.route_path}
                   to={item.route_path}
                   className={`fed-sidebar-link ${isRouteActive(item.route_path) ? 'active' : ''}`}
-                  title={collapsed ? item.label : undefined}
+                  title={collapsed && !isMobile ? item.label : undefined}
                 >
                   {resolveNavIcon(item.icon, item.route_path)}
-                  {!collapsed && <span>{item.label}</span>}
+                  {(!collapsed || isMobile) && <span>{item.label}</span>}
                 </Link>
               ))}
             </div>
@@ -388,16 +410,16 @@ export function AppShell({ children, pageTitle = 'FEDER' }) {
 
           {managementMenus.length > 0 && (
             <div>
-              {!collapsed && <div className="fed-nav-group-label">Gestión Institucional</div>}
+              {(!collapsed || isMobile) && <div className="fed-nav-group-label">Gestión Institucional</div>}
               {managementMenus.map((item) => (
                 <Link
                   key={item.id || item.route_path}
                   to={item.route_path}
                   className={`fed-sidebar-link ${isRouteActive(item.route_path) ? 'active' : ''}`}
-                  title={collapsed ? item.label : undefined}
+                  title={collapsed && !isMobile ? item.label : undefined}
                 >
                   {resolveNavIcon(item.icon, item.route_path)}
-                  {!collapsed && <span>{item.label}</span>}
+                  {(!collapsed || isMobile) && <span>{item.label}</span>}
                 </Link>
               ))}
             </div>
@@ -407,9 +429,9 @@ export function AppShell({ children, pageTitle = 'FEDER' }) {
         <div className="fed-sidebar-footer">
           <Link to="/verificar" className="fed-sidebar-link" style={{ padding: '0.45rem 0.55rem' }} title="Verificador Público QR">
             <QrCode size={17} strokeWidth={1.9} />
-            {!collapsed && <span>Verificar Código QR</span>}
+            {(!collapsed || isMobile) && <span>Verificar Código QR</span>}
           </Link>
-          {!collapsed && user && (
+          {(!collapsed || isMobile) && user && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', padding: '0.2rem 0.55rem', color: '#86EFAC' }}>
               <Clock size={14} />
               <span>Uso activo: <strong>{formatDuration(user.total_active_seconds)}</strong></span>
@@ -427,7 +449,7 @@ export function AppShell({ children, pageTitle = 'FEDER' }) {
               type="button"
               className="btn btn-ghost btn-sm"
               onClick={() => {
-                if (window.innerWidth <= 960) {
+                if (isMobile) {
                   setMobileOpen((v) => !v);
                 } else {
                   setCollapsed((v) => !v);
@@ -435,7 +457,7 @@ export function AppShell({ children, pageTitle = 'FEDER' }) {
               }}
               title="Mostrar u ocultar menú lateral"
             >
-              {window.innerWidth <= 960 ? (
+              {isMobile ? (
                 <Menu size={19} />
               ) : collapsed ? (
                 <PanelLeftOpen size={18} />
@@ -575,7 +597,7 @@ export function AppShell({ children, pageTitle = 'FEDER' }) {
                   <span style={{ maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {user.name.split(' ')[0]}
                   </span>
-                  <span className="fed-badge badge-lead" style={{ padding: '0.1rem 0.45rem', fontSize: '0.68rem' }}>
+                  <span className="fed-badge badge-lead fed-user-chip-role" style={{ padding: '0.1rem 0.45rem', fontSize: '0.68rem' }}>
                     {roleLabel(user.role)}
                   </span>
                 </Link>

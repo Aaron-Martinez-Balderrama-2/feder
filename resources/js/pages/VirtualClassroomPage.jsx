@@ -22,6 +22,8 @@ import {
   Save,
   X,
   Settings,
+  Lock,
+  Unlock,
 } from 'lucide-react';
 import { AppShell, CertificatePrintableCard, FilePickerField } from '../components/AppShell';
 import { usePortal } from '../context/PortalContext';
@@ -221,6 +223,18 @@ export function VirtualClassroomPage() {
     if (!window.confirm('¿Deseas quitar esta fase y sus subfases asociadas?')) return;
     try {
       const res = await api.delete(`/manage/modules/${modId}`);
+      if (res.data.ok) {
+        notify(res.data.message, 'success');
+        loadClassroom();
+      }
+    } catch (err) {
+      notify(extractError(err), 'error');
+    }
+  };
+
+  const handleTogglePhaseComplete = async (modId) => {
+    try {
+      const res = await api.post(`/manage/modules/${modId}/toggle-complete`);
       if (res.data.ok) {
         notify(res.data.message, 'success');
         loadClassroom();
@@ -658,6 +672,12 @@ export function VirtualClassroomPage() {
     (m.classes || []).map((c) => ({ ...c, phase_title: `Fase ${i + 1}: ${m.title}` }))
   );
 
+  const visiblePhaseModules = canManage
+    ? course.modules || []
+    : (course.modules || []).filter((m) => m.is_unlocked !== false);
+
+  const hasLockedPhases = !canManage && (course.modules || []).some((m) => m.is_unlocked === false);
+
   const filteredMaterials = (course.materials || []).filter((m) => {
     if (filterModuleMat && String(m.module_id) !== String(filterModuleMat)) return false;
     return true;
@@ -823,8 +843,14 @@ export function VirtualClassroomPage() {
           )}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            {(course.modules || []).map((mod, idx) => (
-              <div key={mod.id} className="fed-card fed-card-pad">
+            {(course.modules || []).map((mod, idx) => {
+              const isUnlocked = canManage || mod.is_unlocked !== false;
+              return (
+              <div
+                key={mod.id}
+                className="fed-card fed-card-pad"
+                style={!isUnlocked ? { opacity: 0.78, background: 'var(--bg-subtle)' } : undefined}
+              >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.75rem' }}>
                   {editingModuleId === mod.id ? (
                     <div style={{ display: 'flex', gap: '0.45rem', flex: 1, alignItems: 'center' }}>
@@ -842,14 +868,30 @@ export function VirtualClassroomPage() {
                       </button>
                     </div>
                   ) : (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                      <span className="fed-badge badge-orange">Fase {idx + 1}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', flexWrap: 'wrap' }}>
+                      <span className={`fed-badge ${isUnlocked ? 'badge-orange' : 'badge-lead'}`}>Fase {idx + 1}</span>
                       <h3 style={{ margin: 0, fontSize: '1.08rem', fontWeight: 700 }}>{mod.title}</h3>
+                      {mod.is_completed ? (
+                        <span className="fed-badge badge-green">Completada</span>
+                      ) : !isUnlocked ? (
+                        <span className="fed-badge badge-lead">
+                          <Lock size={12} />
+                          <span>Bloqueada</span>
+                        </span>
+                      ) : null}
                     </div>
                   )}
 
                   {canManage && editingModuleId !== mod.id && (
-                    <div style={{ display: 'flex', gap: '0.4rem' }}>
+                    <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                      <button
+                        type="button"
+                        className={`btn btn-sm ${mod.is_completed ? 'btn-secondary' : 'btn-green'}`}
+                        onClick={() => handleTogglePhaseComplete(mod.id)}
+                      >
+                        {mod.is_completed ? <Unlock size={14} /> : <CheckCircle2 size={14} />}
+                        <span>{mod.is_completed ? 'Reabrir Fase' : 'Completar Fase'}</span>
+                      </button>
                       <button
                         type="button"
                         className="btn btn-sm btn-secondary"
@@ -863,13 +905,19 @@ export function VirtualClassroomPage() {
                       </button>
                       <button type="button" className="btn btn-sm btn-danger" onClick={() => handleDeletePhase(mod.id)}>
                         <Trash2 size={14} />
-                        <span>Quitar</span>
                       </button>
                     </div>
                   )}
                 </div>
 
-                {(mod.classes || []).length === 0 ? (
+                {!isUnlocked ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.8rem 0.95rem', borderRadius: 9, border: '1px dashed var(--border-strong)', background: 'var(--bg-card)', color: 'var(--text-secondary)', fontSize: '0.88rem' }}>
+                    <Lock size={16} color="var(--fed-orange)" style={{ flexShrink: 0 }} />
+                    <span>
+                      {mod.lock_reason || 'Contenido bloqueado hasta completar y aprobar la fase anterior.'}
+                    </span>
+                  </div>
+                ) : (mod.classes || []).length === 0 ? (
                   <div style={{ fontSize: '0.86rem', color: 'var(--text-muted)' }}>Sin subfases registradas en esta fase.</div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
@@ -920,7 +968,8 @@ export function VirtualClassroomPage() {
                   </div>
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -938,9 +987,9 @@ export function VirtualClassroomPage() {
                 className={`btn btn-sm ${filterModuleMat === '' ? 'btn-primary' : 'btn-secondary'}`}
                 onClick={() => setFilterModuleMat('')}
               >
-                Todas
+                Todas las habilitadas
               </button>
-              {(course.modules || []).map((m, idx) => (
+              {visiblePhaseModules.map((m, idx) => (
                 <button
                   key={m.id}
                   type="button"
@@ -959,6 +1008,13 @@ export function VirtualClassroomPage() {
               </button>
             )}
           </div>
+
+          {hasLockedPhases && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', padding: '0.75rem 0.95rem', marginBottom: '1rem', borderRadius: 9, background: 'var(--fed-orange-soft)', color: 'var(--fed-orange)', border: '1px solid var(--fed-orange-border)', fontSize: '0.85rem', fontWeight: 600 }}>
+              <Lock size={15} style={{ flexShrink: 0 }} />
+              <span>Los materiales de fases posteriores se desbloquearán automáticamente cuando tu instructor marque como completada la fase actual.</span>
+            </div>
+          )}
 
           {canManage && showMatForm && (
             <form className="fed-card fed-top-stripe-orange fed-card-pad" style={{ marginBottom: '1.25rem' }} onSubmit={handleUploadMaterial}>
