@@ -36,9 +36,9 @@ return new class extends Migration
             $table->date('end_date');
             $table->unsignedTinyInteger('progress_pct')->default(0);
             $table->string('color', 7)->default('#4338CA');
-            $table->string('cover_image')->nullable();
-            $table->string('meet_url')->nullable();
-            $table->string('whatsapp_url')->nullable();
+            $table->string('cover_image', 255)->nullable();
+            $table->text('meet_url')->nullable();
+            $table->text('whatsapp_url')->nullable();
             $table->string('status', 20)->default('draft'); // draft, published, archived
             $table->timestamps();
 
@@ -73,7 +73,7 @@ return new class extends Migration
             $table->foreignId('course_id')->constrained('courses')->cascadeOnDelete();
             $table->foreignId('class_id')->nullable()->constrained('course_classes')->nullOnDelete();
             $table->string('title', 150);
-            $table->string('file_path', 255);
+            $table->text('file_path')->nullable();
             $table->timestamps();
         });
 

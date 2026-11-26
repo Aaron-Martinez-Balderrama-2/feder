@@ -36,8 +36,9 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         // Limpieza de posibles registros temporales de pruebas previas
-        Course::where('title', 'ilike', '%Test Ciclo%')->orWhere('title', 'ilike', '%Capacidad Limitada ACID%')->delete();
-        Category::where('name', 'ilike', '%Test Ciclo%')->delete();
+        $like = \Illuminate\Support\Facades\DB::getDriverName() === 'pgsql' ? 'ilike' : 'like';
+        Course::where('title', $like, '%Test Ciclo%')->orWhere('title', $like, '%Capacidad Limitada ACID%')->delete();
+        Category::where('name', $like, '%Test Ciclo%')->delete();
 
         // 1. Ajustes institucionales dinámicos (100% editables desde panel)
         $settings = [

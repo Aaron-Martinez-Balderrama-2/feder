@@ -154,10 +154,11 @@ class SocialLinkageApiController extends Controller
         ]);
 
         if ($search !== '') {
-            $query->where(function ($b) use ($search) {
-                $b->where('business_name', 'ilike', "%{$search}%")
-                  ->orWhere('municipality', 'ilike', "%{$search}%")
-                  ->orWhereHas('user', fn ($u) => $u->where('name', 'ilike', "%{$search}%"));
+            $like = \Illuminate\Support\Facades\DB::getDriverName() === 'pgsql' ? 'ilike' : 'like';
+            $query->where(function ($b) use ($search, $like) {
+                $b->where('business_name', $like, "%{$search}%")
+                  ->orWhere('municipality', $like, "%{$search}%")
+                  ->orWhereHas('user', fn ($u) => $u->where('name', $like, "%{$search}%"));
             });
         }
 

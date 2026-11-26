@@ -10,6 +10,10 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (DB::getDriverName() !== 'pgsql') {
+            return;
+        }
+
         // Safe ALTER TABLE commands compatible with PostgreSQL
         DB::statement('ALTER TABLE users ALTER COLUMN avatar TYPE varchar(255)');
         DB::statement('ALTER TABLE users ALTER COLUMN profile_picture TYPE varchar(255)');

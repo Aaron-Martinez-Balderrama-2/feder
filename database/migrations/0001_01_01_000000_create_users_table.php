@@ -18,12 +18,12 @@ return new class extends Migration
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
             $table->string('role', 20)->default('student'); // student, instructor, admin
-            $table->string('id_document', 30)->nullable();
-            $table->string('phone', 30)->nullable();
+            $table->string('id_document', 100)->nullable();
+            $table->string('phone', 100)->nullable();
             $table->date('birth_date')->nullable();
-            $table->string('avatar', 30)->default('aurora');
-            $table->string('profile_picture')->nullable();
-            $table->string('gender', 30)->nullable();
+            $table->string('avatar', 255)->nullable()->default('aurora');
+            $table->string('profile_picture', 255)->nullable();
+            $table->string('gender', 50)->nullable();
             $table->boolean('is_active')->default(true);
             $table->rememberToken();
             $table->timestamps();

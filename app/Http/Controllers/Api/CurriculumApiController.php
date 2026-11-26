@@ -74,10 +74,11 @@ class CurriculumApiController extends Controller
             ->where('status', 'published');
 
         if ($search !== '') {
-            $query->where(function ($b) use ($search) {
-                $b->where('title', 'ilike', "%{$search}%")
-                  ->orWhere('hook', 'ilike', "%{$search}%")
-                  ->orWhere('description', 'ilike', "%{$search}%");
+            $like = DB::getDriverName() === 'pgsql' ? 'ilike' : 'like';
+            $query->where(function ($b) use ($search, $like) {
+                $b->where('title', $like, "%{$search}%")
+                  ->orWhere('hook', $like, "%{$search}%")
+                  ->orWhere('description', $like, "%{$search}%");
             });
         }
 
@@ -341,7 +342,8 @@ class CurriculumApiController extends Controller
         }
 
         if ($search !== '') {
-            $query->where('title', 'ilike', "%{$search}%");
+            $like = DB::getDriverName() === 'pgsql' ? 'ilike' : 'like';
+            $query->where('title', $like, "%{$search}%");
         }
 
         return response()->json([

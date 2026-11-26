@@ -276,7 +276,9 @@ return new class extends Migration
         });
 
         // Permitir file_path nulo cuando el recurso es enlace o resumen ligero puro
-        DB::statement('ALTER TABLE course_materials ALTER COLUMN file_path DROP NOT NULL');
+        if (DB::getDriverName() === 'pgsql') {
+            DB::statement('ALTER TABLE course_materials ALTER COLUMN file_path DROP NOT NULL');
+        }
 
         Schema::table('course_attendance', function (Blueprint $table) {
             if (!Schema::hasColumn('course_attendance', 'status')) {
@@ -526,135 +528,251 @@ return new class extends Migration
         }
 
         // =========================================================================
-        // 9. TRIGGERS POSTGRESQL DE CAPA DE PERSISTENCIA (INF513 Capa 3)
+        // 9. TRIGGERS TRANSACCIONALES DE CAPA DE PERSISTENCIA (INF513 Capa 3)
         // =========================================================================
+        if (DB::getDriverName() === 'pgsql') {
+            // Trigger 1: Incremento atómico del contador persistente de visitas por página
+            DB::unprepared("
+                CREATE OR REPLACE FUNCTION fn_increment_page_visits()
+                RETURNS TRIGGER AS \$\$
+                BEGIN
+                    INSERT INTO page_visits (page_path, page_title, hits_count, last_visited_at)
+                    VALUES (NEW.page_path, COALESCE(NEW.page_title, 'Feder'), 1, COALESCE(NEW.visited_at, NOW()))
+                    ON CONFLICT (page_path) DO UPDATE
+                    SET hits_count = page_visits.hits_count + 1,
+                        page_title = COALESCE(EXCLUDED.page_title, page_visits.page_title),
+                        last_visited_at = COALESCE(NEW.visited_at, NOW());
+                    RETURN NEW;
+                END;
+                \$\$ LANGUAGE plpgsql;
 
-        // Trigger 1: Incremento atómico del contador persistente de visitas por página
-        DB::unprepared("
-            CREATE OR REPLACE FUNCTION fn_increment_page_visits()
-            RETURNS TRIGGER AS \$\$
-            BEGIN
-                INSERT INTO page_visits (page_path, page_title, hits_count, last_visited_at)
-                VALUES (NEW.page_path, COALESCE(NEW.page_title, 'Feder'), 1, COALESCE(NEW.visited_at, NOW()))
-                ON CONFLICT (page_path) DO UPDATE
-                SET hits_count = page_visits.hits_count + 1,
-                    page_title = COALESCE(EXCLUDED.page_title, page_visits.page_title),
-                    last_visited_at = COALESCE(NEW.visited_at, NOW());
-                RETURN NEW;
-            END;
-            \$\$ LANGUAGE plpgsql;
+                DROP TRIGGER IF EXISTS trg_increment_page_visits ON page_visit_logs;
+                CREATE TRIGGER trg_increment_page_visits
+                AFTER INSERT ON page_visit_logs
+                FOR EACH ROW EXECUTE FUNCTION fn_increment_page_visits();
+            ");
 
-            DROP TRIGGER IF EXISTS trg_increment_page_visits ON page_visit_logs;
-            CREATE TRIGGER trg_increment_page_visits
-            AFTER INSERT ON page_visit_logs
-            FOR EACH ROW EXECUTE FUNCTION fn_increment_page_visits();
-        ");
+            // Trigger 2: Sincronización transaccional de totales y estados de planes de pago
+            DB::unprepared("
+                CREATE OR REPLACE FUNCTION fn_sync_payment_plan_totals()
+                RETURNS TRIGGER AS \$\$
+                DECLARE
+                    v_plan_id BIGINT;
+                    v_paid NUMERIC(10,2);
+                    v_count INT;
+                    v_total NUMERIC(10,2);
+                BEGIN
+                    v_plan_id := COALESCE(NEW.payment_plan_id, OLD.payment_plan_id);
 
-        // Trigger 2: Sincronización transaccional de totales y estados de planes de pago
-        DB::unprepared("
-            CREATE OR REPLACE FUNCTION fn_sync_payment_plan_totals()
-            RETURNS TRIGGER AS \$\$
-            DECLARE
-                v_plan_id BIGINT;
-                v_paid NUMERIC(10,2);
-                v_count INT;
-                v_total NUMERIC(10,2);
-            BEGIN
-                v_plan_id := COALESCE(NEW.payment_plan_id, OLD.payment_plan_id);
+                    SELECT COALESCE(SUM(amount), 0), COUNT(*)
+                    INTO v_paid, v_count
+                    FROM payment_transactions
+                    WHERE payment_plan_id = v_plan_id AND payment_status = 'completado';
 
-                SELECT COALESCE(SUM(amount), 0), COUNT(*)
-                INTO v_paid, v_count
-                FROM payment_transactions
-                WHERE payment_plan_id = v_plan_id AND payment_status = 'completado';
+                    SELECT total_amount INTO v_total FROM payment_plans WHERE id = v_plan_id;
 
-                SELECT total_amount INTO v_total FROM payment_plans WHERE id = v_plan_id;
+                    UPDATE payment_plans
+                    SET paid_amount = v_paid,
+                        installments_paid = v_count,
+                        status = CASE
+                            WHEN v_paid >= v_total AND v_total >= 0 THEN 'pagado'
+                            WHEN v_paid > 0 THEN 'parcial'
+                            ELSE 'pendiente'
+                        END,
+                        updated_at = NOW()
+                    WHERE id = v_plan_id;
 
-                UPDATE payment_plans
-                SET paid_amount = v_paid,
-                    installments_paid = v_count,
-                    status = CASE
-                        WHEN v_paid >= v_total AND v_total >= 0 THEN 'pagado'
-                        WHEN v_paid > 0 THEN 'parcial'
-                        ELSE 'pendiente'
-                    END,
-                    updated_at = NOW()
-                WHERE id = v_plan_id;
+                    RETURN COALESCE(NEW, OLD);
+                END;
+                \$\$ LANGUAGE plpgsql;
 
-                RETURN COALESCE(NEW, OLD);
-            END;
-            \$\$ LANGUAGE plpgsql;
+                DROP TRIGGER IF EXISTS trg_sync_payment_plan_totals ON payment_transactions;
+                CREATE TRIGGER trg_sync_payment_plan_totals
+                AFTER INSERT OR UPDATE OR DELETE ON payment_transactions
+                FOR EACH ROW EXECUTE FUNCTION fn_sync_payment_plan_totals();
+            ");
 
-            DROP TRIGGER IF EXISTS trg_sync_payment_plan_totals ON payment_transactions;
-            CREATE TRIGGER trg_sync_payment_plan_totals
-            AFTER INSERT OR UPDATE OR DELETE ON payment_transactions
-            FOR EACH ROW EXECUTE FUNCTION fn_sync_payment_plan_totals();
-        ");
+            // Trigger 3: Sincronización del tiempo activo acumulado por usuario en plataforma
+            DB::unprepared("
+                CREATE OR REPLACE FUNCTION fn_sync_user_active_seconds()
+                RETURNS TRIGGER AS \$\$
+                DECLARE
+                    v_uid BIGINT;
+                    v_total BIGINT;
+                BEGIN
+                    v_uid := COALESCE(NEW.user_id, OLD.user_id);
 
-        // Trigger 3: Sincronización del tiempo activo acumulado por usuario en plataforma
-        DB::unprepared("
-            CREATE OR REPLACE FUNCTION fn_sync_user_active_seconds()
-            RETURNS TRIGGER AS \$\$
-            DECLARE
-                v_uid BIGINT;
-                v_total BIGINT;
-            BEGIN
-                v_uid := COALESCE(NEW.user_id, OLD.user_id);
+                    SELECT COALESCE(SUM(seconds_spent), 0)
+                    INTO v_total
+                    FROM usage_sessions
+                    WHERE user_id = v_uid;
 
-                SELECT COALESCE(SUM(seconds_spent), 0)
-                INTO v_total
-                FROM usage_sessions
-                WHERE user_id = v_uid;
+                    UPDATE users
+                    SET total_active_seconds = v_total,
+                        last_seen_at = NOW()
+                    WHERE id = v_uid;
 
-                UPDATE users
-                SET total_active_seconds = v_total,
-                    last_seen_at = NOW()
-                WHERE id = v_uid;
+                    RETURN COALESCE(NEW, OLD);
+                END;
+                \$\$ LANGUAGE plpgsql;
 
-                RETURN COALESCE(NEW, OLD);
-            END;
-            \$\$ LANGUAGE plpgsql;
+                DROP TRIGGER IF EXISTS trg_sync_user_active_seconds ON usage_sessions;
+                CREATE TRIGGER trg_sync_user_active_seconds
+                AFTER INSERT OR UPDATE OR DELETE ON usage_sessions
+                FOR EACH ROW EXECUTE FUNCTION fn_sync_user_active_seconds();
+            ");
 
-            DROP TRIGGER IF EXISTS trg_sync_user_active_seconds ON usage_sessions;
-            CREATE TRIGGER trg_sync_user_active_seconds
-            AFTER INSERT OR UPDATE OR DELETE ON usage_sessions
-            FOR EACH ROW EXECUTE FUNCTION fn_sync_user_active_seconds();
-        ");
+            // Trigger 4: Contador automático de respuestas en hilos del foro
+            DB::unprepared("
+                CREATE OR REPLACE FUNCTION fn_sync_forum_replies_count()
+                RETURNS TRIGGER AS \$\$
+                DECLARE
+                    v_tid BIGINT;
+                BEGIN
+                    v_tid := COALESCE(NEW.thread_id, OLD.thread_id);
+                    UPDATE forum_threads
+                    SET replies_count = (SELECT COUNT(*) FROM forum_replies WHERE thread_id = v_tid),
+                        updated_at = NOW()
+                    WHERE id = v_tid;
+                    RETURN COALESCE(NEW, OLD);
+                END;
+                \$\$ LANGUAGE plpgsql;
 
-        // Trigger 4: Contador automático de respuestas en hilos del foro
-        DB::unprepared("
-            CREATE OR REPLACE FUNCTION fn_sync_forum_replies_count()
-            RETURNS TRIGGER AS \$\$
-            DECLARE
-                v_tid BIGINT;
-            BEGIN
-                v_tid := COALESCE(NEW.thread_id, OLD.thread_id);
-                UPDATE forum_threads
-                SET replies_count = (SELECT COUNT(*) FROM forum_replies WHERE thread_id = v_tid),
-                    updated_at = NOW()
-                WHERE id = v_tid;
-                RETURN COALESCE(NEW, OLD);
-            END;
-            \$\$ LANGUAGE plpgsql;
+                DROP TRIGGER IF EXISTS trg_sync_forum_replies_count ON forum_replies;
+                CREATE TRIGGER trg_sync_forum_replies_count
+                AFTER INSERT OR DELETE ON forum_replies
+                FOR EACH ROW EXECUTE FUNCTION fn_sync_forum_replies_count();
+            ");
+        } elseif (DB::getDriverName() === 'sqlite') {
+            DB::unprepared("
+                DROP TRIGGER IF EXISTS trg_increment_page_visits;
+                CREATE TRIGGER trg_increment_page_visits
+                AFTER INSERT ON page_visit_logs
+                BEGIN
+                    INSERT OR IGNORE INTO page_visits (page_path, page_title, hits_count, last_visited_at)
+                    VALUES (NEW.page_path, COALESCE(NEW.page_title, 'Feder'), 0, COALESCE(NEW.visited_at, CURRENT_TIMESTAMP));
+                    UPDATE page_visits
+                    SET hits_count = hits_count + 1,
+                        page_title = COALESCE(NEW.page_title, page_title),
+                        last_visited_at = COALESCE(NEW.visited_at, CURRENT_TIMESTAMP)
+                    WHERE page_path = NEW.page_path;
+                END;
 
-            DROP TRIGGER IF EXISTS trg_sync_forum_replies_count ON forum_replies;
-            CREATE TRIGGER trg_sync_forum_replies_count
-            AFTER INSERT OR DELETE ON forum_replies
-            FOR EACH ROW EXECUTE FUNCTION fn_sync_forum_replies_count();
-        ");
+                DROP TRIGGER IF EXISTS trg_sync_payment_plan_totals_ins;
+                CREATE TRIGGER trg_sync_payment_plan_totals_ins
+                AFTER INSERT ON payment_transactions
+                BEGIN
+                    UPDATE payment_plans
+                    SET paid_amount = COALESCE((SELECT SUM(amount) FROM payment_transactions WHERE payment_plan_id = NEW.payment_plan_id AND payment_status = 'completado'), 0),
+                        installments_paid = (SELECT COUNT(*) FROM payment_transactions WHERE payment_plan_id = NEW.payment_plan_id AND payment_status = 'completado'),
+                        status = CASE
+                            WHEN COALESCE((SELECT SUM(amount) FROM payment_transactions WHERE payment_plan_id = NEW.payment_plan_id AND payment_status = 'completado'), 0) >= total_amount AND total_amount >= 0 THEN 'pagado'
+                            WHEN COALESCE((SELECT SUM(amount) FROM payment_transactions WHERE payment_plan_id = NEW.payment_plan_id AND payment_status = 'completado'), 0) > 0 THEN 'parcial'
+                            ELSE 'pendiente'
+                        END,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = NEW.payment_plan_id;
+                END;
+
+                DROP TRIGGER IF EXISTS trg_sync_payment_plan_totals_upd;
+                CREATE TRIGGER trg_sync_payment_plan_totals_upd
+                AFTER UPDATE ON payment_transactions
+                BEGIN
+                    UPDATE payment_plans
+                    SET paid_amount = COALESCE((SELECT SUM(amount) FROM payment_transactions WHERE payment_plan_id = NEW.payment_plan_id AND payment_status = 'completado'), 0),
+                        installments_paid = (SELECT COUNT(*) FROM payment_transactions WHERE payment_plan_id = NEW.payment_plan_id AND payment_status = 'completado'),
+                        status = CASE
+                            WHEN COALESCE((SELECT SUM(amount) FROM payment_transactions WHERE payment_plan_id = NEW.payment_plan_id AND payment_status = 'completado'), 0) >= total_amount AND total_amount >= 0 THEN 'pagado'
+                            WHEN COALESCE((SELECT SUM(amount) FROM payment_transactions WHERE payment_plan_id = NEW.payment_plan_id AND payment_status = 'completado'), 0) > 0 THEN 'parcial'
+                            ELSE 'pendiente'
+                        END,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = NEW.payment_plan_id;
+                END;
+
+                DROP TRIGGER IF EXISTS trg_sync_payment_plan_totals_del;
+                CREATE TRIGGER trg_sync_payment_plan_totals_del
+                AFTER DELETE ON payment_transactions
+                BEGIN
+                    UPDATE payment_plans
+                    SET paid_amount = COALESCE((SELECT SUM(amount) FROM payment_transactions WHERE payment_plan_id = OLD.payment_plan_id AND payment_status = 'completado'), 0),
+                        installments_paid = (SELECT COUNT(*) FROM payment_transactions WHERE payment_plan_id = OLD.payment_plan_id AND payment_status = 'completado'),
+                        status = CASE
+                            WHEN COALESCE((SELECT SUM(amount) FROM payment_transactions WHERE payment_plan_id = OLD.payment_plan_id AND payment_status = 'completado'), 0) >= total_amount AND total_amount >= 0 THEN 'pagado'
+                            WHEN COALESCE((SELECT SUM(amount) FROM payment_transactions WHERE payment_plan_id = OLD.payment_plan_id AND payment_status = 'completado'), 0) > 0 THEN 'parcial'
+                            ELSE 'pendiente'
+                        END,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = OLD.payment_plan_id;
+                END;
+
+                DROP TRIGGER IF EXISTS trg_sync_user_active_seconds_ins;
+                CREATE TRIGGER trg_sync_user_active_seconds_ins
+                AFTER INSERT ON usage_sessions
+                BEGIN
+                    UPDATE users
+                    SET total_active_seconds = COALESCE((SELECT SUM(seconds_spent) FROM usage_sessions WHERE user_id = NEW.user_id), 0),
+                        last_seen_at = CURRENT_TIMESTAMP
+                    WHERE id = NEW.user_id;
+                END;
+
+                DROP TRIGGER IF EXISTS trg_sync_user_active_seconds_upd;
+                CREATE TRIGGER trg_sync_user_active_seconds_upd
+                AFTER UPDATE ON usage_sessions
+                BEGIN
+                    UPDATE users
+                    SET total_active_seconds = COALESCE((SELECT SUM(seconds_spent) FROM usage_sessions WHERE user_id = NEW.user_id), 0),
+                        last_seen_at = CURRENT_TIMESTAMP
+                    WHERE id = NEW.user_id;
+                END;
+
+                DROP TRIGGER IF EXISTS trg_sync_user_active_seconds_del;
+                CREATE TRIGGER trg_sync_user_active_seconds_del
+                AFTER DELETE ON usage_sessions
+                BEGIN
+                    UPDATE users
+                    SET total_active_seconds = COALESCE((SELECT SUM(seconds_spent) FROM usage_sessions WHERE user_id = OLD.user_id), 0),
+                        last_seen_at = CURRENT_TIMESTAMP
+                    WHERE id = OLD.user_id;
+                END;
+
+                DROP TRIGGER IF EXISTS trg_sync_forum_replies_count_ins;
+                CREATE TRIGGER trg_sync_forum_replies_count_ins
+                AFTER INSERT ON forum_replies
+                BEGIN
+                    UPDATE forum_threads
+                    SET replies_count = (SELECT COUNT(*) FROM forum_replies WHERE thread_id = NEW.thread_id),
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = NEW.thread_id;
+                END;
+
+                DROP TRIGGER IF EXISTS trg_sync_forum_replies_count_del;
+                CREATE TRIGGER trg_sync_forum_replies_count_del
+                AFTER DELETE ON forum_replies
+                BEGIN
+                    UPDATE forum_threads
+                    SET replies_count = (SELECT COUNT(*) FROM forum_replies WHERE thread_id = OLD.thread_id),
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = OLD.thread_id;
+                END;
+            ");
+        }
     }
 
     public function down(): void
     {
-        DB::unprepared("
-            DROP TRIGGER IF EXISTS trg_sync_forum_replies_count ON forum_replies;
-            DROP FUNCTION IF EXISTS fn_sync_forum_replies_count();
-            DROP TRIGGER IF EXISTS trg_sync_user_active_seconds ON usage_sessions;
-            DROP FUNCTION IF EXISTS fn_sync_user_active_seconds();
-            DROP TRIGGER IF EXISTS trg_sync_payment_plan_totals ON payment_transactions;
-            DROP FUNCTION IF EXISTS fn_sync_payment_plan_totals();
-            DROP TRIGGER IF EXISTS trg_increment_page_visits ON page_visit_logs;
-            DROP FUNCTION IF EXISTS fn_increment_page_visits();
-        ");
+        if (DB::getDriverName() === 'pgsql') {
+            DB::unprepared("
+                DROP TRIGGER IF EXISTS trg_sync_forum_replies_count ON forum_replies;
+                DROP FUNCTION IF EXISTS fn_sync_forum_replies_count();
+                DROP TRIGGER IF EXISTS trg_sync_user_active_seconds ON usage_sessions;
+                DROP FUNCTION IF EXISTS fn_sync_user_active_seconds();
+                DROP TRIGGER IF EXISTS trg_sync_payment_plan_totals ON payment_transactions;
+                DROP FUNCTION IF EXISTS fn_sync_payment_plan_totals();
+                DROP TRIGGER IF EXISTS trg_increment_page_visits ON page_visit_logs;
+                DROP FUNCTION IF EXISTS fn_increment_page_visits();
+            ");
+        }
 
         Schema::dropIfExists('audit_logs');
         Schema::dropIfExists('page_visit_logs');

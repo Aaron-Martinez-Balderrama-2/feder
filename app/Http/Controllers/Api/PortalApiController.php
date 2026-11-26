@@ -96,20 +96,22 @@ class PortalApiController extends Controller
             ]);
         }
 
+        $like = DB::getDriverName() === 'pgsql' ? 'ilike' : 'like';
+
         $courses = Course::with('category:id,name,slug')
             ->where('status', 'published')
-            ->where(function ($b) use ($q) {
-                $b->where('title', 'ilike', "%{$q}%")
-                  ->orWhere('hook', 'ilike', "%{$q}%")
-                  ->orWhere('description', 'ilike', "%{$q}%");
+            ->where(function ($b) use ($q, $like) {
+                $b->where('title', $like, "%{$q}%")
+                  ->orWhere('hook', $like, "%{$q}%")
+                  ->orWhere('description', $like, "%{$q}%");
             })
             ->take(6)
             ->get(['id', 'category_id', 'title', 'slug', 'hook', 'level', 'price', 'modality']);
 
         $classes = CourseClass::with('module.course:id,title,slug,status')
-            ->where(function ($b) use ($q) {
-                $b->where('title', 'ilike', "%{$q}%")
-                  ->orWhere('description', 'ilike', "%{$q}%");
+            ->where(function ($b) use ($q, $like) {
+                $b->where('title', $like, "%{$q}%")
+                  ->orWhere('description', $like, "%{$q}%");
             })
             ->take(5)
             ->get(['id', 'module_id', 'title'])
@@ -123,14 +125,14 @@ class PortalApiController extends Controller
             ])
             ->values();
 
-        $organizations = SocialOrganization::where('name', 'ilike', "%{$q}%")
-            ->orWhere('municipality', 'ilike', "%{$q}%")
+        $organizations = SocialOrganization::where('name', $like, "%{$q}%")
+            ->orWhere('municipality', $like, "%{$q}%")
             ->take(4)
             ->get(['id', 'name', 'municipality', 'organization_type']);
 
         $certificates = Certificate::with(['user:id,name', 'course:id,title'])
             ->where('status', 'valid')
-            ->where('verification_code', 'ilike', "%{$q}%")
+            ->where('verification_code', $like, "%{$q}%")
             ->take(3)
             ->get()
             ->map(fn ($cert) => [

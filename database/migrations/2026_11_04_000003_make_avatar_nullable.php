@@ -10,7 +10,9 @@ return new class extends Migration
      */
     public function up(): void
     {
-        DB::statement('ALTER TABLE users ALTER COLUMN avatar DROP NOT NULL');
+        if (DB::getDriverName() === 'pgsql') {
+            DB::statement('ALTER TABLE users ALTER COLUMN avatar DROP NOT NULL');
+        }
     }
 
     /**

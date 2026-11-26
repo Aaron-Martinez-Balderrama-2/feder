@@ -274,8 +274,11 @@ class PaymentAnalyticsApiController extends Controller
 
         // Tráfico y Flujo de Accesos Web Reales (INF513 Req 7 y 8)
         $topPages = PageVisit::orderByDesc('hits_count')->take(8)->get();
+        $dayExpr = DB::getDriverName() === 'pgsql'
+            ? "TO_CHAR(visited_at, 'YYYY-MM-DD') as day, COUNT(*) as hits"
+            : "SUBSTR(CAST(visited_at AS TEXT), 1, 10) as day, COUNT(*) as hits";
         $dailyVisits = DB::table('page_visit_logs')
-            ->selectRaw("TO_CHAR(visited_at, 'YYYY-MM-DD') as day, COUNT(*) as hits")
+            ->selectRaw($dayExpr)
             ->groupBy('day')
             ->orderBy('day')
             ->limit(14)

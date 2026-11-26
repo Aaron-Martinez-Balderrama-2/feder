@@ -24,3 +24,6 @@ Homestead.yaml
 Thumbs.db
 /BORRAR/
 /_legacy_feder/
+/database/*.sqlite
+/database/*.sqlite-journal
+/database/*.sqlite-wal

@@ -27,10 +27,11 @@ class UserRbacApiController extends Controller
         $query = User::with('entrepreneurProfile:id,user_id,business_name,sector');
 
         if ($search !== '') {
-            $query->where(function ($b) use ($search) {
-                $b->where('name', 'ilike', "%{$search}%")
-                  ->orWhere('email', 'ilike', "%{$search}%")
-                  ->orWhere('id_document', 'ilike', "%{$search}%");
+            $like = DB::getDriverName() === 'pgsql' ? 'ilike' : 'like';
+            $query->where(function ($b) use ($search, $like) {
+                $b->where('name', $like, "%{$search}%")
+                  ->orWhere('email', $like, "%{$search}%")
+                  ->orWhere('id_document', $like, "%{$search}%");
             });
         }
 
@@ -343,11 +344,12 @@ class UserRbacApiController extends Controller
         }
 
         if ($search !== '') {
-            $query->where(function ($b) use ($search) {
-                $b->where('resource', 'ilike', "%{$search}%")
-                  ->orWhere('action_detail', 'ilike', "%{$search}%")
-                  ->orWhere('ip_address', 'ilike', "%{$search}%")
-                  ->orWhere('email_attempted', 'ilike', "%{$search}%");
+            $like = DB::getDriverName() === 'pgsql' ? 'ilike' : 'like';
+            $query->where(function ($b) use ($search, $like) {
+                $b->where('resource', $like, "%{$search}%")
+                  ->orWhere('action_detail', $like, "%{$search}%")
+                  ->orWhere('ip_address', $like, "%{$search}%")
+                  ->orWhere('email_attempted', $like, "%{$search}%");
             });
         }
 
