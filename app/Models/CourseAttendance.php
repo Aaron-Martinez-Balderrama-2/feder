@@ -16,13 +16,17 @@ class CourseAttendance extends Model
     protected $fillable = [
         'user_id',
         'class_id',
+        'status',
+        'recorded_by',
         'created_at',
+        'updated_at',
     ];
 
     protected function casts(): array
     {
         return [
             'created_at' => 'datetime',
+            'updated_at' => 'datetime',
         ];
     }
 
@@ -39,5 +43,10 @@ class CourseAttendance extends Model
     public function class(): BelongsTo
     {
         return $this->courseClass();
+    }
+
+    public function recorder(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'recorded_by');
     }
 }

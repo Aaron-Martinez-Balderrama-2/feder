@@ -1,26 +1,30 @@
 import { defineConfig } from 'vite';
 import laravel from 'laravel-vite-plugin';
-import vue from '@vitejs/plugin-vue';
+import react from '@vitejs/plugin-react';
 import path from 'path';
 
 export default defineConfig({
     plugins: [
         laravel({
-            input: ['resources/css/app.css', 'resources/js/app.js'],
+            input: ['resources/css/app.css', 'resources/js/app.jsx'],
             refresh: true,
         }),
-        vue({
-            template: {
-                transformAssetUrls: {
-                    base: null,
-                    includeAbsolute: false,
-                },
-            },
-        }),
+        react(),
     ],
     resolve: {
         alias: {
             '@': path.resolve(__dirname, 'resources/js'),
+        },
+    },
+    build: {
+        rollupOptions: {
+            output: {
+                manualChunks: {
+                    'vendor-react': ['react', 'react-dom', 'react-router-dom', 'axios'],
+                    'vendor-charts': ['chart.js'],
+                    'vendor-map-qr': ['leaflet', 'qrcode'],
+                },
+            },
         },
     },
     server: {

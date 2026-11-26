@@ -14,17 +14,26 @@ class CourseClass extends Model
     protected $fillable = [
         'module_id',
         'title',
+        'description',
+        'position',
+        'scheduled_at',
+        'attendance_opens_at',
+        'attendance_expires_at',
+        'attendance_code',
+        'summary_light_text',
         'is_completed',
         'completed_at',
-        'attendance_expires_at',
     ];
 
     protected function casts(): array
     {
         return [
+            'position' => 'integer',
             'is_completed' => 'boolean',
-            'completed_at' => 'datetime',
+            'scheduled_at' => 'datetime',
+            'attendance_opens_at' => 'datetime',
             'attendance_expires_at' => 'datetime',
+            'completed_at' => 'datetime',
         ];
     }
 
@@ -43,8 +52,19 @@ class CourseClass extends Model
         return $this->hasMany(CourseAttendance::class, 'class_id');
     }
 
+    public function forumThreads(): HasMany
+    {
+        return $this->hasMany(ForumThread::class, 'class_id');
+    }
+
     public function getIsAttendanceActiveAttribute(): bool
     {
-        return $this->attendance_expires_at !== null && $this->attendance_expires_at->isFuture();
+        if (!$this->attendance_expires_at || !$this->attendance_expires_at->isFuture()) {
+            return false;
+        }
+        if ($this->attendance_opens_at && $this->attendance_opens_at->isFuture()) {
+            return false;
+        }
+        return true;
     }
 }
