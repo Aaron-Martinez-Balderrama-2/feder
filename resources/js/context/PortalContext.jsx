@@ -109,7 +109,7 @@ export function PortalProvider({ children }) {
     refreshBootstrap(initialPath, document.title);
   }, [refreshBootstrap]);
 
-  // Control real de tiempo activo en plataforma y aula (cada 30s)
+  // Control real de tiempo activo en plataforma y aula (cada 60s para optimizar carga concurrente)
   useEffect(() => {
     if (!user) return undefined;
     const interval = setInterval(async () => {
@@ -119,7 +119,7 @@ export function PortalProvider({ children }) {
           ? window.location.hash.replace(/^#/, '') || '/'
           : window.location.pathname || '/';
         const { data } = await api.post('/usage/heartbeat', {
-          seconds: 30,
+          seconds: 60,
           course_id: activeCourseId || null,
           path: activePath,
         });
@@ -129,7 +129,7 @@ export function PortalProvider({ children }) {
       } catch {
         // Silencioso
       }
-    }, 30000);
+    }, 60000);
 
     return () => clearInterval(interval);
   }, [user, activeCourseId]);

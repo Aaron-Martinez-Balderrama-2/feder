@@ -14,8 +14,10 @@ use App\Models\PageVisitLog;
 use App\Models\Setting;
 use App\Models\SocialOrganization;
 use App\Models\UsageSession;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class PortalApiController extends Controller
@@ -34,14 +36,15 @@ class PortalApiController extends Controller
         $user = $request->user();
         $permissions = $user ? $user->permissionSlugs() : [];
 
-        // Menú dinámico por permisos RBAC solo para usuarios autenticados
+        // Menú dinámico por permisos RBAC solo para usuarios autenticados (cacheado con invalidación inmediata al editar)
         $menus = collect();
         if ($user) {
-            $allMenus = MenuItem::where('is_active', true)
+            $allMenus = Cache::remember('bootstrap_menus_active', 60, fn () => MenuItem::where('is_active', true)
                 ->whereNotIn('route_path', ['/', '/pagos'])
                 ->orderBy('sort_order')
                 ->orderBy('id')
-                ->get();
+                ->get()
+            );
 
             $menus = $allMenus->filter(function (MenuItem $item) use ($user, $permissions) {
                 if ($user->isAdmin()) {
@@ -54,17 +57,27 @@ class PortalApiController extends Controller
             })->values();
         }
 
-        $settingsMap = Setting::pluck('setting_value', 'setting_key')->toArray();
+        $settingsMap = Cache::remember('bootstrap_settings_map', 60, fn () => Setting::pluck('setting_value', 'setting_key')->toArray());
+        $categories = Cache::remember('bootstrap_categories_active', 60, fn () => Category::where('is_active', true)->orderBy('name')->get(['id', 'name', 'slug', 'icon', 'description']));
+        $periods = Cache::remember('bootstrap_periods_all', 60, fn () => AcademicPeriod::orderByDesc('is_active')->orderByDesc('start_date')->get());
 
         return response()->json([
             'ok' => true,
             'user' => $user ? $this->serializeUser($user, $permissions) : null,
             'menus' => $menus,
             'settings' => $settingsMap,
-            'categories' => Category::where('is_active', true)->orderBy('name')->get(['id', 'name', 'slug', 'icon', 'description']),
-            'periods' => AcademicPeriod::orderByDesc('is_active')->orderByDesc('start_date')->get(),
+            'categories' => $categories,
+            'periods' => $periods,
             'visits' => $visitData,
         ]);
+    }
+
+    public static function forgetBootstrapCache(): void
+    {
+        Cache::forget('bootstrap_menus_active');
+        Cache::forget('bootstrap_settings_map');
+        Cache::forget('bootstrap_categories_active');
+        Cache::forget('bootstrap_periods_all');
     }
 
     /**
@@ -166,35 +179,53 @@ class PortalApiController extends Controller
             $courseId = null;
         }
 
-        $session = UsageSession::where('user_id', $user->id)
-            ->whereDate('session_date', $today)
-            ->where(function ($q) use ($courseId) {
-                if ($courseId === null) {
-                    $q->whereNull('course_id');
-                } else {
-                    $q->where('course_id', $courseId);
-                }
-            })
-            ->first();
+        $session = DB::transaction(function () use ($user, $courseId, $today, $seconds, $lastPath) {
+            $existing = UsageSession::where('user_id', $user->id)
+                ->whereDate('session_date', $today)
+                ->where(function ($q) use ($courseId) {
+                    if ($courseId === null) {
+                        $q->whereNull('course_id');
+                    } else {
+                        $q->where('course_id', $courseId);
+                    }
+                })
+                ->lockForUpdate()
+                ->first();
 
-        if ($session) {
-            $session->update([
-                'seconds_spent' => $session->seconds_spent + $seconds,
-                'pings_count' => $session->pings_count + 1,
-                'last_path' => $lastPath,
-                'last_ping_at' => now(),
-            ]);
-        } else {
-            $session = UsageSession::create([
-                'user_id' => $user->id,
-                'course_id' => $courseId,
-                'session_date' => $today,
-                'seconds_spent' => $seconds,
-                'pings_count' => 1,
-                'last_path' => $lastPath,
-                'last_ping_at' => now(),
-            ]);
-        }
+            if ($existing) {
+                UsageSession::where('id', $existing->id)->increment('seconds_spent', $seconds, [
+                    'pings_count' => DB::raw('pings_count + 1'),
+                    'last_path' => $lastPath,
+                    'last_ping_at' => now(),
+                ]);
+                return $existing->fresh();
+            }
+
+            try {
+                return UsageSession::create([
+                    'user_id' => $user->id,
+                    'course_id' => $courseId,
+                    'session_date' => $today,
+                    'seconds_spent' => $seconds,
+                    'pings_count' => 1,
+                    'last_path' => $lastPath,
+                    'last_ping_at' => now(),
+                ]);
+            } catch (UniqueConstraintViolationException $e) {
+                $row = UsageSession::where('user_id', $user->id)
+                    ->whereDate('session_date', $today)
+                    ->where('course_id', $courseId)
+                    ->lockForUpdate()
+                    ->firstOrFail();
+
+                UsageSession::where('id', $row->id)->increment('seconds_spent', $seconds, [
+                    'pings_count' => DB::raw('pings_count + 1'),
+                    'last_path' => $lastPath,
+                    'last_ping_at' => now(),
+                ]);
+                return $row->fresh();
+            }
+        }, 3);
 
         $user->refresh();
 

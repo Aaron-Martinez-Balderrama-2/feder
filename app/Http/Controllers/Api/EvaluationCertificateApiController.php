@@ -171,17 +171,6 @@ class EvaluationCertificateApiController extends Controller
             }
         }
 
-        $previousCount = EvaluationAttempt::where('evaluation_id', $evaluation->id)
-            ->where('user_id', $user->id)
-            ->count();
-
-        if ($previousCount >= (int) $evaluation->max_attempts) {
-            return response()->json([
-                'ok' => false,
-                'message' => "Ya alcanzaste el límite máximo de {$evaluation->max_attempts} intentos permitidos para esta evaluación.",
-            ], 422);
-        }
-
         $validated = $request->validate([
             'answers' => ['required', 'array'],
         ]);
@@ -212,16 +201,43 @@ class EvaluationCertificateApiController extends Controller
         $percentage = $maxPoints > 0 ? round(($earnedPoints / $maxPoints) * 100, 2) : 0.0;
         $passed = $percentage >= (float) $evaluation->passing_score;
 
-        $attempt = EvaluationAttempt::create([
-            'evaluation_id' => $evaluation->id,
-            'user_id' => $user->id,
-            'answers' => $validated['answers'],
-            'score' => round($earnedPoints, 2),
-            'max_score' => round($maxPoints, 2),
-            'percentage' => $percentage,
-            'passed' => $passed,
-            'submitted_at' => now(),
-        ]);
+        // Transacción por usuario (bloquea matrícula o usuario) para evitar carrera TOCTOU en max_attempts
+        $attempt = DB::transaction(function () use ($user, $course, $evaluation, $validated, $earnedPoints, $maxPoints, $percentage, $passed) {
+            $lockedEnrollment = Enrollment::where('user_id', $user->id)
+                ->where('course_id', $course->id)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$lockedEnrollment) {
+                \App\Models\User::where('id', $user->id)->lockForUpdate()->first();
+            }
+
+            $previousCount = EvaluationAttempt::where('evaluation_id', $evaluation->id)
+                ->where('user_id', $user->id)
+                ->count();
+
+            if ($previousCount >= (int) $evaluation->max_attempts) {
+                return null;
+            }
+
+            return EvaluationAttempt::create([
+                'evaluation_id' => $evaluation->id,
+                'user_id' => $user->id,
+                'answers' => $validated['answers'],
+                'score' => round($earnedPoints, 2),
+                'max_score' => round($maxPoints, 2),
+                'percentage' => $percentage,
+                'passed' => $passed,
+                'submitted_at' => now(),
+            ]);
+        }, 3);
+
+        if (!$attempt) {
+            return response()->json([
+                'ok' => false,
+                'message' => "Ya alcanzaste el límite máximo de {$evaluation->max_attempts} intentos permitidos para esta evaluación.",
+            ], 422);
+        }
 
         AuditLog::record(
             'create',

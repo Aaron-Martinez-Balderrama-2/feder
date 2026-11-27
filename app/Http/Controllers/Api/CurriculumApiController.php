@@ -216,6 +216,7 @@ class CurriculumApiController extends Controller
             'is_active' => $validated['is_active'] ?? true,
         ]);
 
+        PortalApiController::forgetBootstrapCache();
         AuditLog::record('create', 'categories', "Creación de categoría curricular: {$category->name}");
 
         return response()->json([
@@ -241,6 +242,7 @@ class CurriculumApiController extends Controller
             'is_active' => $validated['is_active'],
         ]);
 
+        PortalApiController::forgetBootstrapCache();
         AuditLog::record('update', 'categories', "Actualización de categoría: {$category->name}");
 
         return response()->json([
@@ -254,6 +256,7 @@ class CurriculumApiController extends Controller
     {
         $name = $category->name;
         $category->delete();
+        PortalApiController::forgetBootstrapCache();
         AuditLog::record('delete', 'categories', "Eliminación de categoría: {$name}");
 
         return response()->json([
@@ -281,6 +284,7 @@ class CurriculumApiController extends Controller
         ]);
 
         $period = AcademicPeriod::create($validated);
+        PortalApiController::forgetBootstrapCache();
         AuditLog::record('create', 'academic_periods', "Nuevo periodo académico: {$period->name} ({$period->code})");
 
         return response()->json([
@@ -301,6 +305,7 @@ class CurriculumApiController extends Controller
         ]);
 
         $period->update($validated);
+        PortalApiController::forgetBootstrapCache();
         AuditLog::record('update', 'academic_periods', "Edición de periodo académico: {$period->code}");
 
         return response()->json([
@@ -314,6 +319,7 @@ class CurriculumApiController extends Controller
     {
         $name = $period->name;
         $period->delete();
+        PortalApiController::forgetBootstrapCache();
         AuditLog::record('delete', 'academic_periods', "Eliminación de periodo: {$name}");
 
         return response()->json([

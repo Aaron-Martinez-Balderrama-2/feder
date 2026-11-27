@@ -567,15 +567,28 @@ class ClassroomApiController extends Controller
             ], 422);
         }
 
-        $record = CourseAttendance::updateOrCreate(
-            ['user_id' => $user->id, 'class_id' => $class->id],
-            [
-                'status' => 'presente',
-                'recorded_by' => $user->id,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]
-        );
+        try {
+            $record = CourseAttendance::updateOrCreate(
+                ['user_id' => $user->id, 'class_id' => $class->id],
+                [
+                    'status' => 'presente',
+                    'recorded_by' => $user->id,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]
+            );
+        } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
+            CourseAttendance::where('user_id', $user->id)
+                ->where('class_id', $class->id)
+                ->update([
+                    'status' => 'presente',
+                    'recorded_by' => $user->id,
+                    'updated_at' => now(),
+                ]);
+            $record = CourseAttendance::where('user_id', $user->id)
+                ->where('class_id', $class->id)
+                ->first();
+        }
 
         return response()->json([
             'ok' => true,

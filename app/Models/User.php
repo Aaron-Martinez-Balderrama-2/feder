@@ -136,18 +136,27 @@ class User extends Authenticatable
     public function permissionSlugs(): array
     {
         if ($this->isAdmin()) {
-            return Permission::pluck('slug')->all();
+            return \Illuminate\Support\Facades\Cache::remember(
+                'rbac_role_perms_admin',
+                60,
+                fn () => Permission::pluck('slug')->all()
+            );
         }
 
-        $roleObj = $this->relationLoaded('roleModel') && $this->roleModel
-            ? $this->roleModel
-            : Role::with('permissions')->where('slug', $this->normalizedRole())->first();
+        $slug = $this->normalizedRole();
+        return \Illuminate\Support\Facades\Cache::remember("rbac_role_perms_{$slug}", 60, function () use ($slug) {
+            $roleObj = $this->relationLoaded('roleModel') && $this->roleModel
+                ? $this->roleModel
+                : Role::with('permissions')->where('slug', $slug)->first();
 
-        if (!$roleObj) {
-            return [];
-        }
+            return $roleObj ? $roleObj->permissions->pluck('slug')->all() : [];
+        });
+    }
 
-        return $roleObj->permissions->pluck('slug')->all();
+    public static function forgetRolePermissionsCache(string $slug): void
+    {
+        \Illuminate\Support\Facades\Cache::forget("rbac_role_perms_{$slug}");
+        \Illuminate\Support\Facades\Cache::forget('rbac_role_perms_admin');
     }
 
     public function hasPermission(string $permissionSlug): bool

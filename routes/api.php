@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\Route;
 */
 
 // 1. Inicialización, Contador de Visitas e Inspección Pública QR (CU6)
-Route::middleware(['api.optional'])->group(function () {
+Route::middleware(['api.optional', 'throttle:api-visit-public'])->group(function () {
     Route::post('/bootstrap', [PortalApiController::class, 'bootstrap']);
     Route::post('/visit', [PortalApiController::class, 'visit']);
 
@@ -26,7 +26,7 @@ Route::middleware(['api.optional'])->group(function () {
 });
 
 // 2. Autenticación y Recuperación de Cuenta
-Route::prefix('auth')->group(function () {
+Route::prefix('auth')->middleware(['throttle:api-auth-public'])->group(function () {
     Route::post('/login', [AuthApiController::class, 'login']);
     Route::post('/register', [AuthApiController::class, 'register']);
     Route::post('/forgot-password', [AuthApiController::class, 'forgotPassword']);
@@ -45,21 +45,21 @@ Route::middleware(['api.auth'])->group(function () {
     Route::post('/auth/preferences', [AuthApiController::class, 'updatePreferences']);
 
     // Pulso de control real de tiempo de uso en plataforma (CU4)
-    Route::post('/usage/heartbeat', [PortalApiController::class, 'heartbeat']);
+    Route::post('/usage/heartbeat', [PortalApiController::class, 'heartbeat'])->middleware('throttle:api-heartbeat');
 
     // Espacio personal del Participante / Docente
     Route::get('/workspace', [ClassroomApiController::class, 'myWorkspace']);
 
     // Aula Virtual, Foro y Asistencia de Participante (CU4)
     Route::get('/classroom/{course}', [ClassroomApiController::class, 'showClassroom']);
-    Route::post('/classroom/{course}/forum', [ClassroomApiController::class, 'storeThread']);
-    Route::post('/forum/threads/{thread}/replies', [ClassroomApiController::class, 'storeReply']);
+    Route::post('/classroom/{course}/forum', [ClassroomApiController::class, 'storeThread'])->middleware('throttle:api-user-write');
+    Route::post('/forum/threads/{thread}/replies', [ClassroomApiController::class, 'storeReply'])->middleware('throttle:api-user-write');
     Route::delete('/forum/threads/{thread}', [ClassroomApiController::class, 'destroyThread']);
-    Route::post('/classes/{class}/mark-attendance', [ClassroomApiController::class, 'markStudentAttendance']);
+    Route::post('/classes/{class}/mark-attendance', [ClassroomApiController::class, 'markStudentAttendance'])->middleware('throttle:api-user-write');
 
     // Evaluaciones Automáticas y Postulación a Feria (CU5)
-    Route::post('/evaluations/{evaluation}/attempt', [EvaluationCertificateApiController::class, 'submitAttempt']);
-    Route::post('/classroom/{course}/fair-register', [EvaluationCertificateApiController::class, 'saveFairParticipation']);
+    Route::post('/evaluations/{evaluation}/attempt', [EvaluationCertificateApiController::class, 'submitAttempt'])->middleware('throttle:api-user-write');
+    Route::post('/classroom/{course}/fair-register', [EvaluationCertificateApiController::class, 'saveFairParticipation'])->middleware('throttle:api-user-write');
 
     // Vinculación Social Propia (CU2)
     Route::get('/social/my-profile', [SocialLinkageApiController::class, 'myProfile']);
@@ -69,7 +69,7 @@ Route::middleware(['api.auth'])->group(function () {
     Route::get('/payments/my', [PaymentAnalyticsApiController::class, 'myPayments']);
     Route::post('/payments/methods', [PaymentAnalyticsApiController::class, 'storePaymentMethod']);
     Route::delete('/payments/methods/{method}', [PaymentAnalyticsApiController::class, 'destroyPaymentMethod']);
-    Route::post('/courses/{course}/checkout', [PaymentAnalyticsApiController::class, 'enrollCheckout']);
+    Route::post('/courses/{course}/checkout', [PaymentAnalyticsApiController::class, 'enrollCheckout'])->middleware('throttle:api-user-write');
     Route::post('/payments/plans/{plan}/pay', [PaymentAnalyticsApiController::class, 'payInstallment']);
 
     // =====================================================================

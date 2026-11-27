@@ -220,6 +220,8 @@ class UserRbacApiController extends Controller
             $role->permissions()->sync($validated['permission_ids']);
         }
 
+        User::forgetRolePermissionsCache($role->slug);
+        PortalApiController::forgetBootstrapCache();
         AuditLog::record('update', 'rbac_matrix', "Actualización de permisos del rol {$role->name}");
 
         return response()->json([
@@ -251,6 +253,7 @@ class UserRbacApiController extends Controller
             'is_active' => $validated['is_active'],
         ]);
 
+        PortalApiController::forgetBootstrapCache();
         AuditLog::record('create', 'menu_items', "Nuevo ítem de menú dinámico: {$menu->label}");
 
         return response()->json([
@@ -282,6 +285,7 @@ class UserRbacApiController extends Controller
             'is_active' => $validated['is_active'],
         ]);
 
+        PortalApiController::forgetBootstrapCache();
         AuditLog::record('update', 'menu_items', "Edición de menú dinámico: {$menuItem->label}");
 
         return response()->json([
@@ -295,6 +299,7 @@ class UserRbacApiController extends Controller
     {
         $label = $menuItem->label;
         $menuItem->delete();
+        PortalApiController::forgetBootstrapCache();
         AuditLog::record('delete', 'menu_items', "Eliminación de menú dinámico: {$label}");
 
         return response()->json([
@@ -327,6 +332,7 @@ class UserRbacApiController extends Controller
             Setting::setVal($k, $v ?? '');
         }
 
+        PortalApiController::forgetBootstrapCache();
         AuditLog::record('update', 'settings', 'Actualización de datos institucionales, plantilla de certificados y fases base');
 
         return response()->json([

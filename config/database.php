@@ -38,10 +38,10 @@ return [
             'database' => env('DB_DATABASE', database_path('database.sqlite')),
             'prefix' => '',
             'foreign_key_constraints' => env('DB_FOREIGN_KEYS', true),
-            'busy_timeout' => null,
-            'journal_mode' => null,
-            'synchronous' => null,
-            'transaction_mode' => 'DEFERRED',
+            'busy_timeout' => (int) env('DB_SQLITE_BUSY_TIMEOUT', 15000),
+            'journal_mode' => env('DB_SQLITE_JOURNAL_MODE', 'WAL'),
+            'synchronous' => env('DB_SQLITE_SYNCHRONOUS', 'NORMAL'),
+            'transaction_mode' => 'IMMEDIATE',
         ],
 
         'mysql' => [
@@ -97,10 +97,10 @@ return [
             'prefix_indexes' => true,
             'search_path' => 'public',
             'sslmode' => env('DB_SSLMODE', 'disable'),
-            'options' => [
-                \PDO::ATTR_PERSISTENT => true,
+            'options' => array_filter([
                 \PDO::ATTR_TIMEOUT => 5,
-            ],
+                \PDO::ATTR_PERSISTENT => filter_var(env('DB_PGSQL_PERSISTENT', false), FILTER_VALIDATE_BOOLEAN) ?: null,
+            ], static fn ($v) => $v !== null),
         ],
 
         'sqlsrv' => [

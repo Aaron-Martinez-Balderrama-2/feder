@@ -2,7 +2,10 @@
 
 namespace App\Providers;
 
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -21,6 +24,26 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->ensureDatabaseHighAvailability();
+        $this->configureApiRateLimiters();
+    }
+
+    protected function configureApiRateLimiters(): void
+    {
+        $actorKey = function (Request $request): string {
+            if ($request->user()?->id) {
+                return 'uid:' . $request->user()->id;
+            }
+            $rawToken = $request->bearerToken() ?: $request->header('X-Auth-Token');
+            if (is_string($rawToken) && trim($rawToken) !== '') {
+                return 'tok:' . hash('sha256', trim($rawToken));
+            }
+            return 'ip:' . $request->ip();
+        };
+
+        RateLimiter::for('api-auth-public', fn (Request $request) => Limit::perMinute(60)->by($request->ip()));
+        RateLimiter::for('api-visit-public', fn (Request $request) => Limit::perMinute(180)->by($actorKey($request)));
+        RateLimiter::for('api-heartbeat', fn (Request $request) => Limit::perMinute(30)->by($actorKey($request)));
+        RateLimiter::for('api-user-write', fn (Request $request) => Limit::perMinute(60)->by($actorKey($request)));
     }
 
     /**
@@ -61,7 +84,7 @@ class AppServiceProvider extends ServiceProvider
             if ($isUp) {
                 @fclose($fp);
             }
-            @file_put_contents($cacheFile, json_encode(['ts' => time(), 'up' => $isUp]));
+            @file_put_contents($cacheFile, json_encode(['ts' => time(), 'up' => $isUp]), LOCK_EX);
         }
 
         if (!$isUp) {
@@ -69,6 +92,10 @@ class AppServiceProvider extends ServiceProvider
                 'database.default' => 'sqlite',
                 'database.connections.sqlite.database' => $sqlitePath,
                 'database.connections.sqlite.foreign_key_constraints' => true,
+                'database.connections.sqlite.busy_timeout' => 15000,
+                'database.connections.sqlite.journal_mode' => 'WAL',
+                'database.connections.sqlite.synchronous' => 'NORMAL',
+                'database.connections.sqlite.transaction_mode' => 'IMMEDIATE',
             ]);
             DB::purge('pgsql');
         }

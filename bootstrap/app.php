@@ -30,6 +30,12 @@ return Application::configure(basePath: dirname(__DIR__))
             'api.optional' => ApiOptionalAuthMiddleware::class,
             'permission' => PermissionMiddleware::class,
         ]);
+
+        // Autenticar usuario antes de evaluar rate limiting por usuario (evita compartir cupo por IP escolar NAT)
+        $middleware->prependToPriorityList(
+            \Illuminate\Routing\Middleware\ThrottleRequests::class,
+            ApiAuthMiddleware::class
+        );
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->render(function (\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $e, Request $request) {

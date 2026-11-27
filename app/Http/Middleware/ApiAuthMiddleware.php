@@ -18,7 +18,7 @@ class ApiAuthMiddleware
 
         if ($rawToken && is_string($rawToken)) {
             $hash = hash('sha256', trim($rawToken));
-            $tokenRecord = ApiToken::with('user.roleModel.permissions')
+            $tokenRecord = ApiToken::with('user')
                 ->where('token_hash', $hash)
                 ->first();
 
@@ -31,7 +31,11 @@ class ApiAuthMiddleware
                 $user = $tokenRecord->user;
                 if ($user && $user->is_active) {
                     if (!$tokenRecord->last_used_at || $tokenRecord->last_used_at->diffInMinutes(now()) >= 5) {
-                        $tokenRecord->update(['last_used_at' => now()]);
+                        try {
+                            $tokenRecord->update(['last_used_at' => now()]);
+                        } catch (\Throwable) {
+                            // No bloquear la petición por actualización no crítica de timestamp
+                        }
                     }
                     Auth::setUser($user);
                     $request->setUserResolver(fn () => $user);

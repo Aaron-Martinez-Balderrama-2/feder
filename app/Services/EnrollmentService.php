@@ -116,12 +116,22 @@ class EnrollmentService
                 ]);
                 $enrollment = $existing;
             } else {
-                $enrollment = Enrollment::create([
-                    'user_id' => $userId,
-                    'course_id' => $courseId,
-                    'status' => 'active',
-                    'enrolled_at' => now(),
-                ]);
+                try {
+                    $enrollment = Enrollment::create([
+                        'user_id' => $userId,
+                        'course_id' => $courseId,
+                        'status' => 'active',
+                        'enrolled_at' => now(),
+                    ]);
+                } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
+                    $dup = Enrollment::where('user_id', $userId)->where('course_id', $courseId)->first();
+                    return [
+                        'ok' => true,
+                        'code' => 'already',
+                        'enrollment_id' => $dup?->id,
+                        'message' => "Ya cuentas con inscripción activa en «{$course->title}».",
+                    ];
+                }
             }
 
             // 6. Gestión estructurada de Pago Único o Plan de Cuotas (INF513 Req 10)
@@ -198,6 +208,6 @@ class EnrollmentService
                 'transaction' => $transaction,
                 'message' => "¡Inscripción confirmada en «{$course->title}»! Ya puedes ingresar a tu aula virtual.",
             ];
-        });
+        }, 3);
     }
 }
