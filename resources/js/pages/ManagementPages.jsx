@@ -64,6 +64,7 @@ export function ManageCoursesPage() {
     start_date: new Date().toISOString().slice(0, 10),
     end_date: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
     meet_url: '',
+    whatsapp_url: '',
     status: 'published',
     prerequisite_ids: [],
     phases: ['Modelo de negocio', 'Finanzas para la empresa', 'Marketing Digital', 'Legal'],
@@ -124,6 +125,7 @@ export function ManageCoursesPage() {
       start_date: new Date().toISOString().slice(0, 10),
       end_date: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
       meet_url: '',
+      whatsapp_url: '',
       status: 'published',
       prerequisite_ids: [],
       phases: [...defaultPhases],
@@ -195,6 +197,7 @@ export function ManageCoursesPage() {
       start_date: (c.start_date || '').slice(0, 10),
       end_date: (c.end_date || '').slice(0, 10),
       meet_url: c.meet_url || '',
+      whatsapp_url: c.whatsapp_url || '',
       status: c.status || 'published',
       prerequisite_ids: (c.prerequisites || []).map((p) => p.id),
       phases: [...defaultPhases],
@@ -360,9 +363,15 @@ export function ManageCoursesPage() {
                 </div>
               </div>
 
-              <div className="fed-field">
-                <label className="fed-label">Enlace de Videoclase (opcional)</label>
-                <input type="url" className="fed-input" placeholder="https://meet.google.com/..." value={courseForm.meet_url} onChange={(e) => setCourseForm({ ...courseForm, meet_url: e.target.value })} />
+              <div className="fed-form-grid-2">
+                <div className="fed-field">
+                  <label className="fed-label">Enlace de Videoclase Meet (opcional)</label>
+                  <input type="url" className="fed-input" placeholder="https://meet.google.com/..." value={courseForm.meet_url} onChange={(e) => setCourseForm({ ...courseForm, meet_url: e.target.value })} />
+                </div>
+                <div className="fed-field">
+                  <label className="fed-label">Grupo de WhatsApp (opcional)</label>
+                  <input type="url" className="fed-input" placeholder="https://chat.whatsapp.com/..." value={courseForm.whatsapp_url} onChange={(e) => setCourseForm({ ...courseForm, whatsapp_url: e.target.value })} />
+                </div>
               </div>
 
               <div className="fed-field">

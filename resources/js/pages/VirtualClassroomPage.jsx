@@ -724,6 +724,12 @@ export function VirtualClassroomPage() {
                 <span>Sala de Videoclase</span>
               </a>
             )}
+            {course.whatsapp_url && (
+              <a href={course.whatsapp_url} target="_blank" rel="noreferrer" className="btn btn-sm btn-green">
+                <MessageSquare size={15} />
+                <span>Grupo WhatsApp</span>
+              </a>
+            )}
           </div>
         </div>
       </div>
