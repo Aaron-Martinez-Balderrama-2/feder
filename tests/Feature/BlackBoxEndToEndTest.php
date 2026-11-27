@@ -430,4 +430,98 @@ class BlackBoxEndToEndTest extends TestCase
             }
         }
     }
+
+    /**
+     * Caja Negra 3 (INF513 3.2): Roles diferenciados y Menú Dinámico desde BD en función de permisos activos.
+     */
+    public function test_blackbox_rbac_dynamic_database_menu_and_role_differentiation(): void
+    {
+        DB::beginTransaction();
+        try {
+            $adminToken = $this->postJson('/api/auth/login', ['email' => 'a3ronmartinez@gmail.com', 'password' => 'password'])->assertStatus(200)->json('token');
+            $partToken = $this->postJson('/api/auth/login', ['email' => 'estudiante@feder.edu.bo', 'password' => 'password'])->assertStatus(200)->json('token');
+            $instToken = $this->postJson('/api/auth/login', ['email' => 'docente@feder.edu.bo', 'password' => 'password'])->assertStatus(200)->json('token');
+            $dirToken = $this->postJson('/api/auth/login', ['email' => 'director@feder.edu.bo', 'password' => 'password'])->assertStatus(200)->json('token');
+
+            $rbacRes = $this->withHeader('X-Auth-Token', $adminToken)->getJson('/api/manage/rbac');
+            $rbacRes->assertStatus(200)->assertJsonPath('ok', true);
+            $roles = collect($rbacRes->json('roles'));
+            $permissions = collect($rbacRes->json('permissions'));
+
+            // Mínimo 2 roles de negocio diferenciados (excluyendo admin): Participante, Instructor y Director Ejecutivo
+            $businessRoles = $roles->where('slug', '!=', 'admin');
+            $this->assertGreaterThanOrEqual(3, $businessRoles->count());
+
+            $partBoot = $this->withHeader('X-Auth-Token', $partToken)->postJson('/api/bootstrap', ['path' => '/mi-aula'])->json('menus');
+            $instBoot = $this->withHeader('X-Auth-Token', $instToken)->postJson('/api/bootstrap', ['path' => '/mi-aula'])->json('menus');
+            $dirBoot = $this->withHeader('X-Auth-Token', $dirToken)->postJson('/api/bootstrap', ['path' => '/mi-aula'])->json('menus');
+
+            $partRoutes = collect($partBoot)->pluck('route_path')->all();
+            $instRoutes = collect($instBoot)->pluck('route_path')->all();
+            $dirRoutes = collect($dirBoot)->pluck('route_path')->all();
+
+            $this->assertNotContains('/gestion/cursos', $partRoutes);
+            $this->assertContains('/gestion/cursos', $instRoutes);
+            $this->assertNotContains('/gestion/usuarios', $instRoutes);
+            $this->assertContains('/gestion/reportes', $dirRoutes);
+
+            // Crear ítem de menú dinámico en BD sujeto a permiso metrics.view
+            $createMenu = $this->withHeader('X-Auth-Token', $adminToken)->postJson('/api/manage/menus', [
+                'label' => 'Resumen Ejecutivo Prueba',
+                'route_path' => '/gestion/reportes',
+                'icon' => 'chart',
+                'permission_slug' => 'metrics.view',
+                'section' => 'management',
+                'sort_order' => 15,
+                'is_active' => true,
+            ]);
+            $createMenu->assertStatus(201);
+            $menuId = $createMenu->json('menu.id');
+
+            // Director lo ve porque tiene metrics.view; Participante NO lo ve
+            $dirLabels = collect($this->withHeader('X-Auth-Token', $dirToken)->postJson('/api/bootstrap', ['path' => '/mi-aula'])->json('menus'))->pluck('label')->all();
+            $partLabels = collect($this->withHeader('X-Auth-Token', $partToken)->postJson('/api/bootstrap', ['path' => '/mi-aula'])->json('menus'))->pluck('label')->all();
+            $this->assertContains('Resumen Ejecutivo Prueba', $dirLabels);
+            $this->assertNotContains('Resumen Ejecutivo Prueba', $partLabels);
+
+            // Ocultar el ítem en BD (is_active = false) -> desaparece inmediatamente del bootstrap
+            $this->withHeader('X-Auth-Token', $adminToken)->putJson("/api/manage/menus/{$menuId}", [
+                'label' => 'Resumen Ejecutivo Prueba',
+                'route_path' => '/gestion/reportes',
+                'icon' => 'chart',
+                'permission_slug' => 'metrics.view',
+                'section' => 'management',
+                'sort_order' => 15,
+                'is_active' => false,
+            ])->assertStatus(200);
+
+            $dirLabelsHidden = collect($this->withHeader('X-Auth-Token', $dirToken)->postJson('/api/bootstrap', ['path' => '/mi-aula'])->json('menus'))->pluck('label')->all();
+            $this->assertNotContains('Resumen Ejecutivo Prueba', $dirLabelsHidden);
+
+            // Reactivar el ítem y conceder metrics.view al rol Participante -> aparece automáticamente en su menú
+            $this->withHeader('X-Auth-Token', $adminToken)->putJson("/api/manage/menus/{$menuId}", [
+                'label' => 'Resumen Ejecutivo Prueba',
+                'route_path' => '/gestion/reportes',
+                'icon' => 'chart',
+                'permission_slug' => 'metrics.view',
+                'section' => 'management',
+                'sort_order' => 15,
+                'is_active' => true,
+            ])->assertStatus(200);
+
+            $partRole = $roles->firstWhere('slug', 'participant');
+            $metricsPerm = $permissions->firstWhere('slug', 'metrics.view');
+            $partPermIds = collect($partRole['permissions'])->pluck('id')->push($metricsPerm['id'])->unique()->values()->all();
+            $this->withHeader('X-Auth-Token', $adminToken)->putJson("/api/manage/rbac/roles/{$partRole['id']}", [
+                'permission_ids' => $partPermIds,
+            ])->assertStatus(200);
+
+            $partLabelsGranted = collect($this->withHeader('X-Auth-Token', $partToken)->postJson('/api/bootstrap', ['path' => '/mi-aula'])->json('menus'))->pluck('label')->all();
+            $this->assertContains('Resumen Ejecutivo Prueba', $partLabelsGranted);
+
+            $this->withHeader('X-Auth-Token', $adminToken)->deleteJson("/api/manage/menus/{$menuId}")->assertStatus(200);
+        } finally {
+            DB::rollBack();
+        }
+    }
 }

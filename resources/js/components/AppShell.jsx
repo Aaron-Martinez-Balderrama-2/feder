@@ -320,35 +320,10 @@ export function AppShell({ children, pageTitle = 'FEDER' }) {
     return location.pathname === routePath || location.pathname.startsWith(`${routePath}/`);
   };
 
-  // Construcción limpia de navegación agrupada por rol (usando BD + garantía de rutas clave según permisos)
-  const fallbackMenus = [
-    { label: 'Mi Panel', route_path: '/mi-aula', icon: 'dashboard', section: 'workspace', show: true },
-    { label: 'Catálogo de Cursos', route_path: '/cursos', icon: 'book', section: 'workspace', show: true },
-    { label: 'Mi Emprendimiento', route_path: '/vinculacion', icon: 'briefcase', section: 'workspace', show: hasPermission('social.own') || user?.role === 'participant' },
-    { label: 'Sede y Contacto', route_path: '/sede', icon: 'map-pin', section: 'workspace', show: true },
-    { label: 'Cursos y Fases', route_path: '/gestion/cursos', icon: 'layers', section: 'management', show: hasPermission('classroom.operate') || hasPermission('curriculum.manage') },
-    { label: 'Certificados QR', route_path: '/gestion/certificados', icon: 'award', section: 'management', show: hasPermission('certificates.manage') || hasPermission('classroom.operate') },
-    { label: 'Vinculación Social', route_path: '/gestion/social', icon: 'handshake', section: 'management', show: hasPermission('social.manage') },
-    { label: 'Reportes e Impacto', route_path: '/gestion/reportes', icon: 'chart', section: 'management', show: hasPermission('metrics.view') || hasPermission('reports.export') },
-    { label: 'Usuarios y Roles', route_path: '/gestion/usuarios', icon: 'users', section: 'management', show: hasPermission('users.manage') },
-    { label: 'Seguridad y Ajustes', route_path: '/gestion/seguridad', icon: 'shield', section: 'management', show: hasPermission('rbac.manage') || hasPermission('audit.view') },
-  ].filter((x) => x.show);
-
-  const effectiveMenus = (() => {
-    const base = menus && menus.length > 0 ? [...menus] : fallbackMenus;
-    // Asegurar que Certificados QR siempre esté disponible para Admin/Director/Instructor
-    const canCert = hasPermission('certificates.manage') || hasPermission('classroom.operate');
-    if (canCert && !base.some((m) => m.route_path === '/gestion/certificados')) {
-      base.push({
-        id: 'cert-mgmt',
-        label: 'Certificados QR',
-        route_path: '/gestion/certificados',
-        icon: 'award',
-        section: 'management',
-      });
-    }
-    return base.filter((m) => !['/', '/pagos', '/verificar'].includes(m.route_path));
-  })();
+  // Menú dinámico renderizado estrictamente desde la base de datos (menu_items filtrados por permisos del rol activo)
+  const effectiveMenus = (Array.isArray(menus) ? menus : []).filter(
+    (m) => !['/', '/pagos', '/verificar'].includes(m.route_path)
+  );
 
   const workspaceMenus = effectiveMenus.filter((m) => m.section !== 'management');
   const managementMenus = effectiveMenus.filter((m) => m.section === 'management');

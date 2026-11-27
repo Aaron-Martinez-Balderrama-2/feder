@@ -18,6 +18,8 @@ import {
   Building2,
   CheckCircle2,
   FileText,
+  ListTree,
+  EyeOff,
 } from 'lucide-react';
 import { AppShell, PaginationBar, FilePickerField, CertificatePrintableCard } from '../components/AppShell';
 import { usePortal } from '../context/PortalContext';
@@ -1931,12 +1933,36 @@ export function ManageUsersPage() {
 // =========================================================================
 // 6. SEGURIDAD, PERMISOS POR ROL Y AJUSTES DE SEDE + FASES BASE (Sin jerga técnica)
 // =========================================================================
+const MENU_DESTINATION_OPTIONS = [
+  { route_path: '/mi-aula', label: 'Mi Panel (Inicio)', icon: 'dashboard', section: 'workspace' },
+  { route_path: '/cursos', label: 'Catálogo de Cursos', icon: 'book', section: 'workspace' },
+  { route_path: '/vinculacion', label: 'Mi Emprendimiento', icon: 'briefcase', section: 'workspace' },
+  { route_path: '/sede', label: 'Sede y Contacto', icon: 'map-pin', section: 'workspace' },
+  { route_path: '/gestion/cursos', label: 'Cursos y Fases (Gestión)', icon: 'layers', section: 'management' },
+  { route_path: '/gestion/certificados', label: 'Certificados QR (Gestión)', icon: 'award', section: 'management' },
+  { route_path: '/gestion/social', label: 'Vinculación Social (Gestión)', icon: 'handshake', section: 'management' },
+  { route_path: '/gestion/reportes', label: 'Reportes e Impacto', icon: 'chart', section: 'management' },
+  { route_path: '/gestion/usuarios', label: 'Usuarios y Roles', icon: 'users', section: 'management' },
+  { route_path: '/gestion/seguridad', label: 'Seguridad y Ajustes', icon: 'shield', section: 'management' },
+];
+
 export function ManageSecurityPage() {
   const { notify, refreshBootstrap } = usePortal();
   const [secTab, setSecTab] = useState('sede');
 
   const [roles, setRoles] = useState([]);
   const [permissions, setPermissions] = useState([]);
+  const [dbMenus, setDbMenus] = useState([]);
+  const [editingMenuId, setEditingMenuId] = useState(null);
+  const [menuForm, setMenuForm] = useState({
+    label: '',
+    route_path: '/mi-aula',
+    icon: 'dashboard',
+    permission_slug: '',
+    section: 'workspace',
+    sort_order: 25,
+    is_active: true,
+  });
   const [settingsForm, setSettingsForm] = useState({
     institution_name: '',
     institution_tagline: '',
@@ -1966,6 +1992,7 @@ export function ManageSecurityPage() {
       if (res.data.ok) {
         setRoles(res.data.roles || []);
         setPermissions((res.data.permissions || []).filter((p) => !String(p.slug).startsWith('payments.')));
+        setDbMenus((res.data.menus || []).filter((m) => !['/', '/pagos', '/verificar'].includes(m.route_path)));
         const s = res.data.settings || {};
         setSettingsForm((prev) => ({ ...prev, ...s }));
         if (s.default_phases_json) {
@@ -2033,6 +2060,91 @@ export function ManageSecurityPage() {
     }
   };
 
+  const resetMenuForm = () => {
+    setEditingMenuId(null);
+    setMenuForm({
+      label: '',
+      route_path: '/mi-aula',
+      icon: 'dashboard',
+      permission_slug: '',
+      section: 'workspace',
+      sort_order: 25,
+      is_active: true,
+    });
+  };
+
+  const saveMenu = async (e) => {
+    e.preventDefault();
+    try {
+      const payload = {
+        ...menuForm,
+        sort_order: Number(menuForm.sort_order) || 10,
+        permission_slug: menuForm.permission_slug || null,
+        is_active: Boolean(menuForm.is_active),
+      };
+      const res = editingMenuId
+        ? await api.put(`/manage/menus/${editingMenuId}`, payload)
+        : await api.post('/manage/menus', payload);
+      if (res.data.ok) {
+        notify(res.data.message || 'Menú dinámico guardado.', 'success');
+        resetMenuForm();
+        loadRbac();
+        refreshBootstrap(window.location.pathname, 'Seguridad y Ajustes');
+      }
+    } catch (err) {
+      notify(extractError(err), 'error');
+    }
+  };
+
+  const toggleMenuActive = async (item) => {
+    try {
+      const res = await api.put(`/manage/menus/${item.id}`, {
+        label: item.label,
+        route_path: item.route_path,
+        icon: item.icon || 'dashboard',
+        permission_slug: item.permission_slug || null,
+        section: item.section || 'workspace',
+        sort_order: Number(item.sort_order) || 10,
+        is_active: !item.is_active,
+      });
+      if (res.data.ok) {
+        notify(item.is_active ? `Opción «${item.label}» ocultada del menú.` : `Opción «${item.label}» visible nuevamente.`, 'success');
+        loadRbac();
+        refreshBootstrap(window.location.pathname, 'Seguridad y Ajustes');
+      }
+    } catch (err) {
+      notify(extractError(err), 'error');
+    }
+  };
+
+  const startEditMenu = (item) => {
+    setEditingMenuId(item.id);
+    setMenuForm({
+      label: item.label || '',
+      route_path: item.route_path || '/mi-aula',
+      icon: item.icon || 'dashboard',
+      permission_slug: item.permission_slug || '',
+      section: item.section || 'workspace',
+      sort_order: Number(item.sort_order) || 10,
+      is_active: Boolean(item.is_active),
+    });
+  };
+
+  const deleteMenu = async (item) => {
+    if (!window.confirm(`¿Quitar la opción «${item.label}» del menú dinámico?`)) return;
+    try {
+      const res = await api.delete(`/manage/menus/${item.id}`);
+      if (res.data.ok) {
+        notify(res.data.message || 'Opción eliminada.', 'success');
+        if (editingMenuId === item.id) resetMenuForm();
+        loadRbac();
+        refreshBootstrap(window.location.pathname, 'Seguridad y Ajustes');
+      }
+    } catch (err) {
+      notify(extractError(err), 'error');
+    }
+  };
+
   return (
     <AppShell pageTitle="Seguridad y Ajustes">
       <div className="fed-section-head">
@@ -2052,6 +2164,10 @@ export function ManageSecurityPage() {
         <button type="button" className={`fed-tab-btn ${secTab === 'rbac' ? 'active' : ''}`} onClick={() => setSecTab('rbac')}>
           <Lock size={16} />
           <span>Permisos por Rol</span>
+        </button>
+        <button type="button" className={`fed-tab-btn ${secTab === 'menus' ? 'active' : ''}`} onClick={() => setSecTab('menus')}>
+          <ListTree size={16} />
+          <span>Menú Dinámico (BD)</span>
         </button>
         <button type="button" className={`fed-tab-btn ${secTab === 'bitacora' ? 'active' : ''}`} onClick={() => setSecTab('bitacora')}>
           <ShieldCheck size={16} />
@@ -2165,7 +2281,10 @@ export function ManageSecurityPage() {
 
       {secTab === 'rbac' && (
         <div className="fed-card fed-card-pad">
-          <h3 style={{ marginTop: 0, fontSize: '1.05rem' }}>Permisos Habilitados por Rol</h3>
+          <h3 style={{ marginTop: 0, marginBottom: '0.35rem', fontSize: '1.05rem' }}>Permisos Habilitados por Rol</h3>
+          <p className="fed-page-desc" style={{ marginTop: 0, marginBottom: '1rem', fontSize: '0.88rem' }}>
+            Al activar o desactivar un permiso para Participante, Instructor o Director Ejecutivo, las opciones de su menú lateral se actualizan automáticamente desde la base de datos.
+          </p>
           <div className="fed-table-wrap">
             <table className="fed-table">
               <thead>
@@ -2201,6 +2320,213 @@ export function ManageSecurityPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {secTab === 'menus' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+          <form className="fed-card fed-top-stripe-green fed-card-pad" onSubmit={saveMenu}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '0.9rem' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.05rem' }}>
+                  {editingMenuId ? 'Editar Opción del Menú Lateral' : 'Agregar Opción al Menú Lateral'}
+                </h3>
+                <p style={{ margin: '0.25rem 0 0', fontSize: '0.86rem', color: 'var(--text-muted)' }}>
+                  El menú de cada usuario se genera desde la base de datos según los permisos concedidos a su rol activo.
+                </p>
+              </div>
+              {editingMenuId && (
+                <button type="button" className="fed-btn fed-btn-ghost" onClick={resetMenuForm}>
+                  <X size={15} />
+                  <span>Cancelar edición</span>
+                </button>
+              )}
+            </div>
+
+            <div className="fed-form-grid-2">
+              <div className="fed-field">
+                <label>Nombre visible en el menú *</label>
+                <input
+                  className="fed-input"
+                  required
+                  maxLength={80}
+                  placeholder="Ej. Catálogo de Cursos"
+                  value={menuForm.label}
+                  onChange={(e) => setMenuForm((f) => ({ ...f, label: e.target.value }))}
+                />
+              </div>
+
+              <div className="fed-field">
+                <label>Pantalla o sección de destino *</label>
+                <select
+                  className="fed-select"
+                  value={menuForm.route_path}
+                  onChange={(e) => {
+                    const chosen = MENU_DESTINATION_OPTIONS.find((opt) => opt.route_path === e.target.value);
+                    setMenuForm((f) => ({
+                      ...f,
+                      route_path: e.target.value,
+                      icon: chosen?.icon || f.icon,
+                      section: chosen?.section || f.section,
+                    }));
+                  }}
+                >
+                  {MENU_DESTINATION_OPTIONS.map((opt) => (
+                    <option key={opt.route_path} value={opt.route_path}>
+                      {opt.label}
+                    </option>
+                  ))}
+                  {!MENU_DESTINATION_OPTIONS.some((opt) => opt.route_path === menuForm.route_path) && (
+                    <option value={menuForm.route_path}>{menuForm.route_path}</option>
+                  )}
+                </select>
+              </div>
+
+              <div className="fed-field">
+                <label>¿Quién puede ver esta opción? (Permiso requerido)</label>
+                <select
+                  className="fed-select"
+                  value={menuForm.permission_slug}
+                  onChange={(e) => setMenuForm((f) => ({ ...f, permission_slug: e.target.value }))}
+                >
+                  <option value="">Todos los usuarios con sesión iniciada</option>
+                  {permissions.map((perm) => (
+                    <option key={perm.id} value={perm.slug}>
+                      {perm.name} ({perm.module})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="fed-field">
+                <label>Grupo en el menú lateral</label>
+                <select
+                  className="fed-select"
+                  value={menuForm.section}
+                  onChange={(e) => setMenuForm((f) => ({ ...f, section: e.target.value }))}
+                >
+                  <option value="workspace">Mi Espacio (Participantes y General)</option>
+                  <option value="management">Gestión Institucional (Equipo FEDER)</option>
+                </select>
+              </div>
+
+              <div className="fed-field">
+                <label>Orden de aparición</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={999}
+                  className="fed-input"
+                  value={menuForm.sort_order}
+                  onChange={(e) => setMenuForm((f) => ({ ...f, sort_order: Number(e.target.value) || 10 }))}
+                />
+              </div>
+
+              <div className="fed-field" style={{ justifyContent: 'flex-end' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', cursor: 'pointer', marginBottom: 0 }}>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(menuForm.is_active)}
+                    onChange={(e) => setMenuForm((f) => ({ ...f, is_active: e.target.checked }))}
+                    style={{ width: 17, height: 17, accentColor: 'var(--fed-green)' }}
+                  />
+                  <span>Visible en el menú lateral</span>
+                </label>
+              </div>
+            </div>
+
+            <div style={{ marginTop: '1rem', display: 'flex', gap: '0.65rem', flexWrap: 'wrap' }}>
+              <button type="submit" className="fed-btn fed-btn-primary">
+                <Save size={16} />
+                <span>{editingMenuId ? 'Guardar Cambios' : 'Agregar al Menú'}</span>
+              </button>
+            </div>
+          </form>
+
+          <div className="fed-card fed-card-pad">
+            <h3 style={{ marginTop: 0, marginBottom: '0.75rem', fontSize: '1.05rem' }}>
+              Opciones Guardadas en Base de Datos ({dbMenus.length})
+            </h3>
+            <div className="fed-table-wrap">
+              <table className="fed-table">
+                <thead>
+                  <tr>
+                    <th>Orden</th>
+                    <th>Opción Visible</th>
+                    <th>Destino</th>
+                    <th>Grupo</th>
+                    <th>Permiso Requerido</th>
+                    <th>Estado</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dbMenus.map((item) => {
+                    const permObj = permissions.find((p) => p.slug === item.permission_slug);
+                    const destObj = MENU_DESTINATION_OPTIONS.find((d) => d.route_path === item.route_path);
+                    return (
+                      <tr key={item.id}>
+                        <td><strong>{item.sort_order}</strong></td>
+                        <td><strong>{item.label}</strong></td>
+                        <td style={{ fontSize: '0.84rem', color: 'var(--text-muted)' }}>
+                          {destObj ? destObj.label : item.route_path}
+                        </td>
+                        <td style={{ fontSize: '0.84rem' }}>
+                          {item.section === 'management' ? 'Gestión Institucional' : 'Mi Espacio'}
+                        </td>
+                        <td style={{ fontSize: '0.84rem' }}>
+                          {item.permission_slug ? (permObj ? permObj.name : item.permission_slug) : 'Todos (sesión activa)'}
+                        </td>
+                        <td>
+                          <span className={`fed-badge ${item.is_active ? 'fed-badge-green' : 'fed-badge-muted'}`}>
+                            {item.is_active ? 'Visible' : 'Oculto'}
+                          </span>
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                            <button
+                              type="button"
+                              className="fed-btn fed-btn-ghost"
+                              style={{ padding: '0.35rem 0.65rem', fontSize: '0.8rem' }}
+                              onClick={() => toggleMenuActive(item)}
+                            >
+                              {item.is_active ? <EyeOff size={14} /> : <Eye size={14} />}
+                              <span>{item.is_active ? 'Ocultar' : 'Mostrar'}</span>
+                            </button>
+                            <button
+                              type="button"
+                              className="fed-btn fed-btn-ghost"
+                              style={{ padding: '0.35rem 0.65rem', fontSize: '0.8rem' }}
+                              onClick={() => startEditMenu(item)}
+                            >
+                              <Edit3 size={14} />
+                              <span>Editar</span>
+                            </button>
+                            <button
+                              type="button"
+                              className="fed-btn fed-btn-danger"
+                              style={{ padding: '0.35rem 0.65rem', fontSize: '0.8rem' }}
+                              onClick={() => deleteMenu(item)}
+                            >
+                              <Trash2 size={14} />
+                              <span>Quitar</span>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {dbMenus.length === 0 && (
+                    <tr>
+                      <td colSpan={7} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '1.25rem' }}>
+                        No hay opciones de menú registradas todavía.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
