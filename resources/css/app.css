@@ -1,7 +1,7 @@
 /* =========================================================================
    FEDER · SISTEMA DE DISEÑO LIMPIO Y DESCANSO VISUAL (SAAS / LMS MODERNO)
    Paleta Corporativa: Naranja (#F7780F), Verde (#13AC44) y Plomo (#1E252B / #64748B)
-   Estilos Adultos (Compacto, Estándar, Lectura Amplia) + Día/Noche + WCAG
+   3 Temas por Segmento (+18: Jóvenes, Adultos, Adulto Mayor) × Día/Noche/Auto × WCAG
    ========================================================================= */
 
 :root {
@@ -50,7 +50,7 @@
   --font-mono: 'JetBrains Mono', monospace;
 }
 
-/* MODO NOCHE SUAVE (Sin negros agresivos salvo en Alto Contraste) */
+/* MODO NOCHE BASE — ADULTOS (Sin negros agresivos salvo en Alto Contraste) */
 :root[data-theme="dark"] {
   --bg-canvas: #0F141A;
   --bg-card: #171F28;
@@ -73,26 +73,117 @@
   --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.28);
 }
 
-/* ESTILOS VISUALES EXCLUSIVOS PARA ADULTOS (Sin modo niños) */
-:root[data-segment="ejecutivo"],
-:root[data-segment="jovenes"] {
+/* SEGMENTO 1: JÓVENES (+18 Dinámico y Moderno — Día y Noche independientes) */
+:root[data-segment="jovenes"],
+:root[data-segment="ejecutivo"] {
+  --bg-canvas: #ECF2FC;
+  --bg-card: #FFFFFF;
+  --bg-subtle: #E6EFFD;
+  --bg-sidebar: #0F172A;
+  --text-main: #0B1324;
+  --text-secondary: #334155;
+  --border-line: #CBD5E1;
+  --border-strong: #94A3B8;
+
+  --fed-orange: #FF6B00;
+  --fed-orange-hover: #E05E00;
+  --fed-orange-soft: #FFF1E6;
+  --fed-green: #059669;
+  --fed-green-hover: #047857;
+  --fed-green-soft: #ECFDF5;
+
+  --radius-card: 16px;
+  --radius-btn: 12px;
+  --control-height: 2.55rem;
+  --shadow-card: 0 4px 16px rgba(30, 58, 138, 0.06);
+}
+
+:root[data-segment="jovenes"][data-theme="dark"],
+:root[data-segment="ejecutivo"][data-theme="dark"] {
+  --bg-canvas: #080D1A;
+  --bg-card: #11192E;
+  --bg-subtle: #1A2642;
+  --bg-sidebar: #050914;
+  --text-main: #F8FAFC;
+  --text-secondary: #CBD5E1;
+  --text-muted: #94A3B8;
+  --border-line: #283655;
+  --border-strong: #3E5280;
+
+  --fed-orange: #FF7A1A;
+  --fed-orange-hover: #FF9442;
+  --fed-orange-soft: rgba(255, 122, 26, 0.16);
+  --fed-green: #10B981;
+  --fed-green-hover: #059669;
+  --fed-green-soft: rgba(16, 185, 129, 0.16);
+  --shadow-card: 0 4px 18px rgba(0, 0, 0, 0.38);
+}
+
+/* SEGMENTO 2: ADULTOS (Corporativo Equilibrado — hereda :root y [data-theme="dark"]) */
+:root[data-segment="adultos"] {
+  --radius-card: 12px;
+  --radius-btn: 9px;
+  --control-height: 2.625rem;
+}
+
+/* SEGMENTO 3: ADULTO MAYOR (+18 Lectura Cálida y Ergonomía Amplia — Día y Noche) */
+:root[data-segment="lectura"] {
+  --bg-canvas: #F3ECE0;
+  --bg-card: #FFFDF7;
+  --bg-subtle: #EAE0CF;
+  --bg-sidebar: #28231D;
+  --text-sidebar: #E7DFD3;
+  --text-main: #1C1917;
+  --text-secondary: #44403C;
+  --text-muted: #57534E;
+  --border-line: #D6CBB8;
+  --border-strong: #A89A84;
+
+  --fed-orange: #C2410C;
+  --fed-orange-hover: #9A3412;
+  --fed-orange-soft: #FFEDD5;
+  --fed-green: #15803D;
+  --fed-green-hover: #166534;
+  --fed-green-soft: #DCFCE7;
+
   --radius-card: 10px;
   --radius-btn: 8px;
-  --control-height: 2.45rem;
+  --control-height: 2.95rem;
 }
 
-:root[data-segment="lectura"] {
-  --radius-card: 14px;
-  --radius-btn: 10px;
-  --control-height: 2.85rem;
+:root[data-segment="lectura"][data-theme="dark"] {
+  --bg-canvas: #171410;
+  --bg-card: #221D17;
+  --bg-subtle: #2D261E;
+  --bg-sidebar: #110E0B;
+  --text-sidebar: #E7DFD3;
+  --text-main: #F7F1E8;
+  --text-secondary: #E0D6C5;
+  --text-muted: #B6A996;
+  --border-line: #43392D;
+  --border-strong: #625443;
+
+  --fed-orange: #FB923C;
+  --fed-orange-hover: #FDBA74;
+  --fed-orange-soft: rgba(251, 146, 60, 0.16);
+  --fed-green: #4ADE80;
+  --fed-green-hover: #22C55E;
+  --fed-green-soft: rgba(74, 222, 128, 0.15);
+  --shadow-card: 0 2px 10px rgba(0, 0, 0, 0.35);
 }
 
-/* ACCESIBILIDAD WCAG: ALTO CONTRASTE */
+:root[data-segment="lectura"] body {
+  line-height: 1.68;
+  letter-spacing: 0.01em;
+}
+
+/* ACCESIBILIDAD WCAG: ALTO CONTRASTE (Compatible encima de cualquier tema Día/Noche/Segmento) */
 :root[data-contrast="high"] {
   --bg-canvas: #000000 !important;
   --bg-card: #0B0B0B !important;
   --bg-subtle: #161616 !important;
   --bg-sidebar: #000000 !important;
+  --text-sidebar: #FFFFFF !important;
   --text-main: #FFFFFF !important;
   --text-secondary: #F8FAFC !important;
   --text-muted: #E2E8F0 !important;
@@ -248,14 +339,14 @@ img {
 }
 
 .fed-sidebar-link.active {
-  background: rgba(247, 120, 15, 0.16);
+  background: color-mix(in srgb, var(--fed-orange) 16%, transparent);
   color: #FFFFFF;
   font-weight: 600;
-  border-left-color: #F7780F;
+  border-left-color: var(--fed-orange);
 }
 
 .fed-sidebar-link.active svg {
-  color: #F7780F;
+  color: var(--fed-orange);
 }
 
 .fed-sidebar-footer {
@@ -472,7 +563,7 @@ img {
   position: absolute;
   right: 0;
   top: calc(100% + 0.45rem);
-  width: min(310px, 92vw);
+  width: min(350px, 94vw);
   background: var(--bg-card);
   color: var(--text-main);
   border: 1px solid var(--border-line);

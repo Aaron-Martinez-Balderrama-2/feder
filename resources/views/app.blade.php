@@ -28,6 +28,7 @@
                 var prefs = JSON.parse(localStorage.getItem('feder_prefs') || '{}');
                 var seg = prefs.preferred_theme || 'adultos';
                 if (seg === 'ninos') seg = 'adultos';
+                if (seg === 'ejecutivo') seg = 'jovenes';
                 var mode = prefs.preferred_color_mode || 'auto';
                 var scale = parseFloat(prefs.font_scale || '1');
                 var contrast = !!prefs.high_contrast;

@@ -12,6 +12,7 @@ const DEFAULT_PREFS = {
 
 function normalizeTheme(val) {
   if (!val || val === 'ninos') return 'adultos';
+  if (val === 'ejecutivo') return 'jovenes';
   return val;
 }
 

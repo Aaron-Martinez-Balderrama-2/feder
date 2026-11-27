@@ -83,20 +83,21 @@ export function AppearancePopover({ prefs, updateVisualPreferences }) {
             Preferencias de Lectura y Vista
           </div>
 
-          {/* Densidad y Estilo Visual Exclusivo para Adultos */}
+          {/* 3 Temas Dinámicos por Segmento (+18: Jóvenes, Adultos, Adulto Mayor) */}
           <div style={{ marginBottom: '0.85rem' }}>
             <div style={{ fontSize: '0.76rem', fontWeight: 600, marginBottom: '0.35rem', color: 'var(--text-muted)' }}>
-              Densidad de Interfaz:
+              Tema por Segmento (+18):
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.35rem' }}>
               {[
-                { id: 'ejecutivo', label: 'Compacta' },
-                { id: 'adultos', label: 'Estándar' },
-                { id: 'lectura', label: 'Amplia' },
+                { id: 'jovenes', label: 'Jóvenes' },
+                { id: 'adultos', label: 'Adultos' },
+                { id: 'lectura', label: 'Adulto Mayor' },
               ].map((seg) => (
                 <button
                   key={seg.id}
                   type="button"
+                  style={{ fontSize: '0.78rem', paddingLeft: '0.35rem', paddingRight: '0.35rem', whiteSpace: 'nowrap' }}
                   className={`btn btn-sm ${prefs.preferred_theme === seg.id ? 'btn-primary' : 'btn-secondary'}`}
                   onClick={() => updateVisualPreferences({ preferred_theme: seg.id })}
                 >

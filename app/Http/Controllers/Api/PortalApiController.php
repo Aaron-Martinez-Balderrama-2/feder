@@ -273,6 +273,8 @@ class PortalApiController extends Controller
         $theme = $user->preferred_theme ?: 'adultos';
         if ($theme === 'ninos') {
             $theme = 'adultos';
+        } elseif ($theme === 'ejecutivo') {
+            $theme = 'jovenes';
         }
         return [
             'id' => $user->id,
